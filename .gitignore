@@ -1,0 +1,20 @@
+# Kompilaty (odtwarzalne z main.go — patrz BUILD.md)
+KRONIKARZ.exe
+KRONIKARZ_DEBUG.exe
+KRONIKARZ
+kronikarz
+*.exe
+*.out
+
+# Dane runtime (tworzone lokalnie przy grze)
+/data/db.json
+/data/avatars/*
+/data/backgrounds/*
+/data/exports/*
+/data/characters/*
+/data/adventures/*
+!/data/**/.keep
+error_log.txt
+
+# Środowisko deweloperskie
+.DS_Store

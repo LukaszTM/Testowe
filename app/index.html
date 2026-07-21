@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KRONIKARZ 2.0</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="app" class="shell">
+    <header class="topbar ornate">
+      <div class="brand"><div class="sigil">K</div><div class="brand-title">KRONIKARZ</div></div>
+      <div class="top-stat"><span>ŚWIAT</span><strong id="topWorld">—</strong></div>
+      <div class="top-stat"><span>LOKALIZACJA</span><strong id="topLocation">—</strong></div>
+      <div class="top-stat"><span>ROZDZIAŁ</span><strong id="topChapter">—</strong></div>
+      <div class="window-actions"><button id="btnHelp">?</button><button id="btnSettingsTop">⚙</button><button id="btnShutdown">✕</button></div>
+    </header>
+
+    <aside class="sidebar ornate">
+      <button class="nav active" data-screen="story">✦ Opowieść</button>
+      <button class="nav" data-screen="adventures">📚 Zapisane przygody</button>
+      <button class="nav" data-screen="characters">📖 Biblioteka postaci</button>
+      <button class="nav" id="btnNewCharacter">🜲 Nowa postać</button>
+      <button class="nav" data-modal="chronicle">📜 Kronika świata</button>
+      <button class="nav" data-screen="characterDetail">🧍 Postać</button>
+      <button class="nav" data-modal="inventory">🎒 Ekwipunek</button>
+      <button class="nav" data-modal="quests">⚔ Zadania</button>
+      <button class="nav" data-modal="relations">👥 Relacje</button>
+      <button class="nav" data-screen="settings">⚙ Ustawienia AI</button>
+      <button class="nav" id="btnExport">⇪ Eksport kroniki</button>
+      <div class="sidebar-art"><div class="moon">☾</div><p>Każda opowieść zaczyna się od decyzji. Świat dopisuje resztę.</p></div>
+    </aside>
+
+    <main class="main">
+      <section id="screenStory" class="screen active">
+        <div class="story-panel ornate">
+          <div id="sceneBg" class="scene-bg village mystery"></div>
+          <div class="scene-mask"></div>
+          <div class="scene-label" id="sceneLabel">Scena: —</div>
+          <div class="scroll-tools"><button id="btnScrollTop" title="Początek rozmowy">▲</button><button id="btnScrollBottom" title="Najnowsza wiadomość">▼</button></div>
+          <div id="log" class="log"></div>
+        </div>
+        <div class="choice-row">
+          <button class="choice-card" id="choice1"><small>Propozycja 1</small><span>—</span></button>
+          <button class="choice-card" id="choice2"><small>Propozycja 2</small><span>—</span></button>
+          <button class="choice-card" id="choice3"><small>Propozycja 3</small><span>—</span></button>
+        </div>
+        <div class="input-row ornate">
+          <input id="playerInput" placeholder="Wpisz swoją decyzję..." />
+          <button id="btnSend" class="primary">Wyślij ✈</button>
+          <button id="btnRoll" class="secondary">🎲 Rzut kością</button>
+        </div>
+      </section>
+
+      <section id="screenAdventures" class="screen">
+        <div class="library ornate">
+          <div class="section-head"><div><h2>Zapisane przygody</h2><p>Twoje kroniki są zapisywane lokalnie na tym komputerze. Wróć do dowolnej albo rozpocznij nową.</p></div><button class="primary" id="btnNewAdventureFromList">＋ Nowa opowieść</button></div>
+          <div id="adventureList" class="adventure-list"></div>
+        </div>
+      </section>
+
+      <section id="screenCharacters" class="screen">
+        <div class="library ornate">
+          <div class="section-head"><div><h2>Biblioteka postaci</h2><p>Wybierz zapisaną postać lub stwórz nową, aby rozpocząć przygodę.</p></div><button class="secondary" id="btnNewCharacter2">＋ Nowa postać</button></div>
+          <div class="library-grid">
+            <div class="character-list" id="characterList"></div>
+            <div class="character-preview" id="characterPreview"></div>
+            <div class="progress-card" id="characterProgress"></div>
+          </div>
+          <div class="library-actions"><button id="btnPlaySelected" class="primary wide">Graj tą postacią →</button><button id="btnEditSelected" class="secondary">Edytuj</button></div>
+        </div>
+      </section>
+
+      <section id="screenCharacterDetail" class="screen">
+        <div class="library ornate"><div class="section-head"><h2>Karta postaci</h2><button id="btnOpenCharacterLibrary" class="secondary">Biblioteka postaci</button></div><div id="characterFull" class="character-full"></div></div>
+      </section>
+
+      <section id="screenSettings" class="screen">
+        <div class="settings ornate"><h2>Ustawienia AI</h2>
+          <div class="mode-note">
+            <div class="mode-badge free">Wersja darmowa — offline</div>
+            <p>Tryb <b>Procedural offline</b> działa bez internetu i bez kluczy API. Narracja jest generowana lokalnie i dopasowuje się do wybranego gatunku oraz epoki świata.</p>
+            <div class="mode-badge paid">Wersja płatna — online AI</div>
+            <p>Tryby <b>Ollama/Bielik</b> (lokalny model) oraz <b>Claude / OpenAI</b> (usługa online z Twoim kluczem) prowadzą pełną rozmowę z modelem językowym. Wymagają odpowiednio zainstalowanego modelu lub tokenu API.</p>
+          </div>
+          <div class="form-grid settings-grid">
+            <label>Tryb AI<select id="aiMode"><option value="procedural">Procedural offline (darmowy)</option><option value="bielik">Bielik/Ollama lokalnie (płatny/AI)</option><option value="ollama">Ollama inny model (płatny/AI)</option><option value="claude_proxy">Claude Proxy / Bearer (płatny/AI)</option><option value="claude">Claude official / x-api-key (płatny/AI)</option><option value="openai">OpenAI-compatible (płatny/AI)</option></select></label>
+            <label>Tryb uruchamiania<select id="windowMode"><option value="window">Okno</option><option value="fullscreen">Pełny ekran</option></select></label>
+            <label>Bielik model<input id="bielikModel" /></label>
+            <label>Ollama model<input id="ollamaModel" /></label>
+            <label>Claude base URL<input id="claudeBaseUrl" /></label>
+            <label>Claude model<input id="claudeModel" /></label>
+            <label>Claude auth<select id="claudeAuthType"><option value="bearer">Authorization: Bearer</option><option value="x-api-key">x-api-key</option></select></label>
+            <label>Claude token<input id="claudeToken" type="password" placeholder="wklej token" /></label>
+            <label>OpenAI endpoint<input id="openAiEndpoint" /></label>
+            <label>OpenAI model<input id="openAiModel" /></label>
+            <label>OpenAI API key<input id="openAiApiKey" type="password" /></label>
+          </div>
+          <div class="modal-actions"><button class="primary" id="btnSaveSettings">Zapisz ustawienia</button><button class="secondary" id="btnApplyScreenMode">Zastosuj tryb ekranu teraz</button><button class="secondary" id="btnTestAI">Testuj połączenie</button><span id="aiTestResult"></span></div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="rightbar">
+      <div class="card ornate"><h3>Aktywne zadania</h3><div id="questPanel"></div></div>
+      <div class="card ornate"><h3>Stan postaci</h3><div id="statusPanel"></div></div>
+      <div class="card ornate"><h3>Relacje</h3><div id="relationPanel"></div></div>
+      <div class="card ornate"><h3>Ostatnie odkrycia</h3><div id="discoveryPanel"></div></div>
+    </aside>
+  </div>
+
+  <dialog id="characterDialog" class="codex-dialog"><form method="dialog"><h2 id="charDialogTitle">Nowa postać</h2><div class="form-grid">
+    <label>Imię<input name="name" /></label><label>Wiek<input name="age" /></label><label>Płeć<input name="gender" /></label><label>Rasa<input name="race" /></label><label>Klasa / profesja<input name="class" /></label><label>Pochodzenie<input name="origin" /></label><label>Cel<textarea name="goal"></textarea></label><label>Wada<textarea name="flaw"></textarea></label><label>Zaleta<textarea name="strength"></textarea></label><label>Sekret<textarea name="secret"></textarea></label>
+    <fieldset class="attrs"><legend>Atrybuty</legend><label>Siła<input name="strengthAttr" type="number" value="2" min="1" max="20" /></label><label>Zręczność<input name="dexterity" type="number" value="2" min="1" max="20" /></label><label>Kondycja<input name="condition" type="number" value="2" min="1" max="20" /></label><label>Umysł<input name="mind" type="number" value="2" min="1" max="20" /></label><label>Percepcja<input name="perception" type="number" value="2" min="1" max="20" /></label><label>Charyzma<input name="charisma" type="number" value="2" min="1" max="20" /></label><label>Wola<input name="will" type="number" value="2" min="1" max="20" /></label><label>Szczęście<input name="luck" type="number" value="2" min="1" max="20" /></label><label>Technika<input name="technique" type="number" value="2" min="1" max="20" /></label><label>Przetrwanie<input name="survival" type="number" value="2" min="1" max="20" /></label></fieldset>
+    <label class="avatar-upload">Awatar PNG/JPG/WEBP<input id="avatarFile" type="file" accept="image/png,image/jpeg,image/webp,image/*" /><small class="avatar-hint">Możesz też dodać lub zmienić awatar później w Bibliotece postaci.</small></label>
+  </div><div class="modal-actions"><button type="button" class="secondary" id="btnCancelCharacter" value="cancel">Anuluj</button><button type="button" class="primary" id="btnSaveCharacter" value="default">Zapisz postać</button></div></form></dialog>
+
+  <dialog id="worldDialog" class="codex-dialog"><form method="dialog"><h2>Nowa opowieść</h2><p>To Ty tworzysz świat: wybierz gatunek, epokę i lata, w których toczy się gra. Resztę KRONIKARZ dopisze w rozmowie.</p>
+    <label class="preset-row">Szybki szablon gatunku
+      <select id="worldPreset">
+        <option value="">— wybierz, aby wstępnie wypełnić pola —</option>
+        <option value="fantasy">Fantasy (miecz i magia)</option>
+        <option value="historyczny">Historyczny (realia dawnych epok)</option>
+        <option value="modern">Współczesność / thriller</option>
+        <option value="noir">Kryminał / noir</option>
+        <option value="horror">Groza / horror</option>
+        <option value="scifi">Science fiction</option>
+        <option value="cyberpunk">Cyberpunk</option>
+        <option value="postapo">Postapokalipsa</option>
+        <option value="western">Western</option>
+        <option value="steampunk">Steampunk</option>
+      </select>
+      <small>Szablon tylko podpowiada wartości — możesz zmienić każde pole.</small>
+    </label>
+    <div class="form-grid">
+    <label>Nazwa świata<input name="name" value="Velmora" /></label><label>Gatunek<input name="genre" value="mroczne fantasy" /></label><label>Epoka<input name="era" value="późne średniowiecze" /></label><label>Rok / lata akcji<input name="year" placeholder="np. 1385, lata 20. XX w., rok 2377" /></label><label>Klimat<input name="climate" value="samotna wędrówka, tajemnica, ruiny dawnej cywilizacji" /></label><label>Nadnaturalność<input name="supernatural" value="niska, rzadka i niebezpieczna" /></label><label>Główna tajemnica<textarea name="mystery">nocą spod ziemi słychać dzwony</textarea></label><label>Startowa lokacja<input name="startLocation" value="Osada Hadrin" /></label><label>Opis startowej lokacji / miejsca wydarzeń<textarea name="startDescription" placeholder="Opcjonalnie. Jeśli zostawisz puste, KRONIKARZ opisze miejsce sam."></textarea></label><label>Czego unikać<input name="avoid" value="erotyka, przesadna przemoc" /></label><label>Ton opowieści<input name="tone" value="mroczny, tajemniczy, przygodowy" /></label>
+  </div><div class="modal-actions"><button type="button" class="secondary" id="btnCancelWorld" value="cancel">Anuluj</button><button type="button" id="btnStartAdventure" class="primary" value="default">Rozpocznij przygodę</button></div></form></dialog>
+
+  <dialog id="infoDialog" class="codex-dialog small"><form method="dialog"><h2 id="infoTitle">Informacja</h2><div id="infoBody" class="info-body"></div><div class="modal-actions"><button class="primary" value="default">Zamknij</button></div></form></dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>

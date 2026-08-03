@@ -23,12 +23,73 @@ var settings: Dictionary = {
 	"ai_host": "http://localhost:11434",
 	"ai_model": "bielik",
 	"font_scale": 1.0,
+	"resolution": "1280x720",             # "SZERxWYS"
+	"window_mode": "windowed",            # "windowed" / "borderless" / "fullscreen"
+	"music_volume": 0.4,                  # 0.0 – 1.0
+	"sfx_on": true,
+	"dice_mode": "risk",                  # "risk" / "always" / "off"
 }
 
 const SETTINGS_PATH := "user://ustawienia.json"
 
 func _ready() -> void:
 	load_settings()
+	apply_display()
+
+# ——— Ekran: rozdzielczość i tryb okna ————————————————————————
+
+# Rozdzielczości do wyboru — automatycznie ograniczone do wielkości ekranu,
+# z dopisaną rozdzielczością natywną.
+func available_resolutions() -> Array:
+	var common := [
+		Vector2i(1280, 720), Vector2i(1280, 800), Vector2i(1366, 768),
+		Vector2i(1440, 900), Vector2i(1600, 900), Vector2i(1920, 1080),
+		Vector2i(2560, 1440), Vector2i(3440, 1440), Vector2i(3840, 2160),
+	]
+	var scr := DisplayServer.window_get_current_screen()
+	var native := DisplayServer.screen_get_size(scr)
+	var out: Array = []
+	for r in common:
+		if r.x <= native.x and r.y <= native.y and not out.has(r):
+			out.append(r)
+	if not out.has(native):
+		out.append(native)
+	out.sort_custom(func(a, b): return a.x * a.y < b.x * b.y)
+	return out
+
+func native_resolution() -> Vector2i:
+	return DisplayServer.screen_get_size(DisplayServer.window_get_current_screen())
+
+func apply_display() -> void:
+	var win := get_window()
+	if win == null:
+		return
+	var mode := str(settings.get("window_mode", "windowed"))
+	match mode:
+		"fullscreen":
+			win.mode = Window.MODE_FULLSCREEN
+		"borderless":
+			win.mode = Window.MODE_WINDOWED
+			win.borderless = true
+			_resize_and_center(win)
+		_:
+			win.mode = Window.MODE_WINDOWED
+			win.borderless = false
+			_resize_and_center(win)
+
+func _resize_and_center(win: Window) -> void:
+	var parts := str(settings.get("resolution", "1280x720")).split("x")
+	if parts.size() != 2:
+		return
+	var w := int(parts[0])
+	var h := int(parts[1])
+	if w <= 0 or h <= 0:
+		return
+	win.size = Vector2i(w, h)
+	var scr := DisplayServer.window_get_current_screen()
+	var scr_pos := DisplayServer.screen_get_position(scr)
+	var scr_size := DisplayServer.screen_get_size(scr)
+	win.position = scr_pos + (scr_size - Vector2i(w, h)) / 2
 
 func profile() -> Dictionary:
 	return Genres.profile(world.get("genre_key", "fantasy"))
@@ -76,7 +137,9 @@ func take_action(action: String) -> void:
 
 	if text == "":
 		# Tryb offline (także fallback, gdy AI zawiedzie).
-		roll = Narrator.roll_action(rng, _archetype_modifier())
+		# Rzut kością tylko wtedy, gdy działanie faktycznie stawia coś na szali.
+		if _should_roll(action):
+			roll = Narrator.roll_action(rng, _archetype_modifier())
 		text = Narrator.respond(world, character, prof, action, roll, rng)
 
 	var entry := {"role": "narrator", "text": text}
@@ -85,6 +148,24 @@ func take_action(action: String) -> void:
 	history.append(entry)
 	_update_memory(action, text)
 	emit_signal("chronicle_changed")
+
+# Decyduje, czy dane działanie wymaga rzutu kością — zależnie od trybu w ustawieniach.
+func _should_roll(action: String) -> bool:
+	match str(settings.get("dice_mode", "risk")):
+		"always":
+			return true
+		"off":
+			return false
+		_:
+			# "risk": tylko starcia i ryzykowne, fizyczne akcje.
+			if Narrator.classify(action) == "fight":
+				return true
+			var s := action.to_lower()
+			for w in ["skrad", "uciek", "wspina", "przeskak", "wykrad", "forsuj",
+					"wywa", "przemyk", "ryzyk", "napieram", "wdrap", "skacz"]:
+				if s.contains(w):
+					return true
+			return false
 
 # Delikatny modyfikator do rzutu zależny od archetypu — nic ekstremalnego.
 func _archetype_modifier() -> int:
@@ -182,13 +263,12 @@ func save_settings() -> void:
 		f.close()
 
 func load_settings() -> void:
-	if not FileAccess.file_exists(SETTINGS_PATH):
-		return
-	var f := FileAccess.open(SETTINGS_PATH, FileAccess.READ)
-	if not f:
-		return
-	var parsed = JSON.parse_string(f.get_as_text())
-	f.close()
-	if typeof(parsed) == TYPE_DICTIONARY:
-		for k in parsed.keys():
-			settings[k] = parsed[k]
+	if FileAccess.file_exists(SETTINGS_PATH):
+		var f := FileAccess.open(SETTINGS_PATH, FileAccess.READ)
+		if f:
+			var parsed = JSON.parse_string(f.get_as_text())
+			f.close()
+			if typeof(parsed) == TYPE_DICTIONARY:
+				for k in parsed.keys():
+					settings[k] = parsed[k]
+	Ui.scale = float(settings.get("font_scale", 1.0))

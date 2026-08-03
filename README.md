@@ -65,15 +65,41 @@ src/core/              logika gry (autoloady)
   Narrator.gd          silnik narracji + rzuty kością + tryb AI (Ollama)
   GameState.gd         stan sesji, Kronika, przebieg akcji
   SaveManager.gd       zapis i odczyt kronik
+  Audio.gd             muzyka w tle i dźwięki przycisków
 src/ui/                interfejs
-  Ui.gd                paleta, motyw i fabryki kontrolek
+  Ui.gd                paleta, czcionka, motyw i fabryki kontrolek
   Router.gd            przełączanie ekranów
   MainMenu / WorldCreation / CharacterCreation / PlayScreen / LoadScreen / SettingsScreen
+assets/fonts/          EB Garamond (krój „pisany piórem”, licencja OFL)
+assets/audio/          ścieżka dźwiękowa (theme.wav) i dźwięki przycisków
 icon.svg               ikona aplikacji
 ```
+
+## Ustawienia
+
+W menu **Ustawienia** można zmienić m.in.:
+
+- **rozdzielczość** — lista jest budowana automatycznie na podstawie ekranu (z oznaczoną rozdzielczością natywną),
+- **tryb okna** — w oknie / bez ramki / pełny ekran,
+- **głośność muzyki** i **dźwięki przycisków**,
+- **rzuty kością** — tylko przy starciach i ryzyku (domyślnie), zawsze albo nigdy,
+- **wielkość tekstu**.
+
+## Własna ścieżka dźwiękowa
+
+Domyślną, spokojną pętlę (`assets/audio/theme.wav`) możesz podmienić na własny
+utwór — wystarczy zastąpić ten plik innym `theme.wav` lub `theme.ogg`. Godot
+zapętli go automatycznie. Używaj wyłącznie muzyki, do której masz prawa.
 
 ## Licencja
 
 Kod gry objęty jest licencją MIT (patrz [`LICENSE`](LICENSE)) — można go
 swobodnie wykorzystywać, także komercyjnie. Silnik Godot rozprowadzany jest na
 licencji MIT i nie nakłada opłat licencyjnych ani tantiem od sprzedaży gry.
+
+Dołączone zasoby również nadają się do użytku komercyjnego:
+
+- **Czcionka EB Garamond** — licencja SIL Open Font License 1.1
+  (patrz [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt)).
+- **Dźwięki i muzyka** (`assets/audio/`) — wygenerowane na potrzeby projektu,
+  możesz ich używać i podmieniać bez ograniczeń.

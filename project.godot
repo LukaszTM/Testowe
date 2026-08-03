@@ -18,6 +18,7 @@ Genres="*res://src/core/Genres.gd"
 Narrator="*res://src/core/Narrator.gd"
 Saves="*res://src/core/SaveManager.gd"
 Game="*res://src/core/GameState.gd"
+Audio="*res://src/core/Audio.gd"
 
 [display]
 

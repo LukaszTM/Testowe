@@ -20,7 +20,8 @@ var started := false
 
 var settings: Dictionary = {
 	"mode": "offline",                    # "offline" / "claude" / "ollama"
-	"claude_api_key": "",                 # klucz z platform.claude.com
+	"claude_api_key": "",                 # klucz z platform.claude.com lub bramki zgodnej z API Anthropic
+	"claude_base_url": "https://api.anthropic.com",
 	"claude_model": "claude-opus-5",
 	"ai_host": "http://localhost:11434",  # Ollama (model lokalny)
 	"ai_model": "bielik",

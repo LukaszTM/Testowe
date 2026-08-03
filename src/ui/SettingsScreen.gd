@@ -3,6 +3,7 @@ extends Control
 
 var _mode: OptionButton
 var _claude_key: LineEdit
+var _claude_url: LineEdit
 var _claude_model: LineEdit
 var _claude_rows: VBoxContainer
 var _host: LineEdit
@@ -124,11 +125,15 @@ func _ready() -> void:
 	_claude_rows = VBoxContainer.new()
 	_claude_rows.add_theme_constant_override("separation", 10)
 	col.add_child(_claude_rows)
-	_claude_rows.add_child(Ui.subtle("Claude API to usługa w chmurze Anthropic — nie stawiasz żadnego serwera i działa niezależnie od Twojego komputera. Klucz wygenerujesz na platform.claude.com (Settings → API keys). Klucz zapisuje się tylko lokalnie, w Twoim katalogu ustawień.", 12))
-	var ckey := Ui.field("Klucz Claude API", "sk-ant-...", Game.settings.get("claude_api_key", ""))
+	_claude_rows.add_child(Ui.subtle("Usługa w chmurze — nie stawiasz żadnego serwera i działa niezależnie od Twojego komputera. Klucz z platform.claude.com (oficjalne API Anthropic) albo ze zgodnej bramki, np. aiprimetech.io — wtedy wpisz jej adres poniżej. Klucz zapisuje się tylko lokalnie.", 12))
+	var ckey := Ui.field("Klucz API", "sk-...", Game.settings.get("claude_api_key", ""))
 	_claude_key = ckey["edit"]
 	_claude_key.secret = true
 	_claude_rows.add_child(ckey["row"])
+	var curl := Ui.field("Adres API", "https://api.anthropic.com", Game.settings.get("claude_base_url", "https://api.anthropic.com"))
+	_claude_url = curl["edit"]
+	_claude_rows.add_child(curl["row"])
+	_claude_rows.add_child(Ui.subtle("Oficjalne API: https://api.anthropic.com · AI Prime Tech: https://aiprimetech.io", 12))
 	var cmodel := Ui.field("Model", "claude-opus-5", Game.settings.get("claude_model", "claude-opus-5"))
 	_claude_model = cmodel["edit"]
 	_claude_rows.add_child(cmodel["row"])
@@ -183,6 +188,8 @@ func _toggle_ai() -> void:
 func _save() -> void:
 	Game.settings["mode"] = ["offline", "claude", "ollama"][_mode.selected]
 	Game.settings["claude_api_key"] = _claude_key.text.strip_edges()
+	var cu := _claude_url.text.strip_edges().rstrip("/")
+	Game.settings["claude_base_url"] = cu if cu != "" else "https://api.anthropic.com"
 	var cm := _claude_model.text.strip_edges()
 	Game.settings["claude_model"] = cm if cm != "" else "claude-opus-5"
 	Game.settings["ai_host"] = _host.text.strip_edges()

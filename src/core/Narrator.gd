@@ -125,7 +125,7 @@ func _period(world: Dictionary) -> String:
 # wymaga żadnego serwera po stronie gracza i działa niezależnie od jego
 # komputera. Potrzebny jest tylko klucz API (platform.claude.com).
 
-const CLAUDE_URL := "https://api.anthropic.com/v1/messages"
+const CLAUDE_DEFAULT_BASE := "https://api.anthropic.com"
 const CLAUDE_VERSION := "2023-06-01"
 const MAX_HISTORY := 30   # ile ostatnich wpisów kroniki trafia do modelu
 
@@ -210,12 +210,23 @@ func _claude_request(system: String, messages: Array) -> String:
 		"system": system,
 		"messages": messages,
 	}
+	# Adres bazowy: oficjalne api.anthropic.com albo zgodna bramka
+	# (np. https://aiprimetech.io). Endpoint jest ten sam: /v1/messages.
+	var base := str(Game.settings.get("claude_base_url", CLAUDE_DEFAULT_BASE)).strip_edges().rstrip("/")
+	if base == "":
+		base = CLAUDE_DEFAULT_BASE
 	var headers := [
 		"content-type: application/json",
-		"x-api-key: " + key,
 		"anthropic-version: " + CLAUDE_VERSION,
 	]
-	var err := _http.request(CLAUDE_URL, headers, HTTPClient.METHOD_POST, JSON.stringify(payload))
+	if base.contains("api.anthropic.com"):
+		# Oficjalne API: wyłącznie x-api-key (dwa nagłówki naraz odrzuca).
+		headers.append("x-api-key: " + key)
+	else:
+		# Bramki różnie autoryzują — wysyłamy obie formy, zbędną ignorują.
+		headers.append("x-api-key: " + key)
+		headers.append("Authorization: Bearer " + key)
+	var err := _http.request(base + "/v1/messages", headers, HTTPClient.METHOD_POST, JSON.stringify(payload))
 	if err != OK:
 		emit_signal("ai_state", false, "Nie udało się połączyć z Claude API — tryb offline.")
 		return ""

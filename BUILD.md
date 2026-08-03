@@ -51,10 +51,12 @@ godot --headless --export-release "macOS" dist/Kronikarz.zip
 
 Żaden tryb online nie jest wymagany — offline działa w pełni samodzielnie.
 
-**Claude API (zalecany):** hostowana usługa Anthropic — nie stawiasz żadnego
-serwera. Wygeneruj klucz API na [platform.claude.com](https://platform.claude.com)
-(Settings → API keys), a w grze: *Ustawienia → Mistrz Gry → Claude API* i wklej
-klucz. Usługa jest płatna za zużycie tokenów.
+**Claude API (zalecany):** hostowana usługa — nie stawiasz żadnego serwera.
+Klucz wygenerujesz na [platform.claude.com](https://platform.claude.com)
+(Settings → API keys) albo skorzystasz z bramki zgodnej z API Anthropic
+(np. aiprimetech.io) — wtedy w polu „Adres API” wpisz adres bramki.
+W grze: *Ustawienia → Mistrz Gry → Claude API*, wklej klucz i zapisz.
+Usługa jest płatna za zużycie tokenów.
 
 **Ollama (model lokalny):**
 

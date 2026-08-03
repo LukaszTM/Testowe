@@ -10,18 +10,26 @@ func _ready() -> void:
 		margin.add_theme_constant_override("margin_" + s, 40)
 	add_child(margin)
 
-	var center := CenterContainer.new()
-	margin.add_child(center)
-
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(640, 0)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	center.add_child(scroll)
+	margin.add_child(scroll)
+
+	var center := HBoxContainer.new()
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(center)
+
+	var lsp := Control.new()
+	lsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.add_child(lsp)
 
 	var col := VBoxContainer.new()
 	col.custom_minimum_size = Vector2(620, 0)
 	col.add_theme_constant_override("separation", 12)
-	scroll.add_child(col)
+	center.add_child(col)
+
+	var rsp := Control.new()
+	rsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.add_child(rsp)
 
 	col.add_child(Ui.title("Zapisane kroniki", 32))
 	col.add_child(Ui.spacer(4))

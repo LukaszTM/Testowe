@@ -96,7 +96,7 @@ func _restore() -> void:
 
 func _go_next() -> void:
 	var key := Genres.key_at(_f["genre"].selected)
-	var world_name := _f["name"].text.strip_edges()
+	var world_name: String = _f["name"].text.strip_edges()
 	if world_name == "":
 		world_name = "Świat bez nazwy"
 	Game.world = {

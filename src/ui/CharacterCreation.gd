@@ -107,7 +107,7 @@ func _restore() -> void:
 
 func _start() -> void:
 	var prof := Game.profile()
-	var hero_name := _f["name"].text.strip_edges()
+	var hero_name: String = _f["name"].text.strip_edges()
 	if hero_name == "":
 		hero_name = "Bezimienny"
 	Game.character = {

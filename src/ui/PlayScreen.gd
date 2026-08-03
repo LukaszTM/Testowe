@@ -183,7 +183,7 @@ func _set_busy(b: bool) -> void:
 	_send.disabled = b
 	_input.editable = not b
 	if b and Narrator.ai_enabled():
-		_status.text = "Narrator myśli…"
+		_status.text = "Mistrz Gry myśli…"
 	else:
 		_status.text = _mode_note()
 
@@ -259,6 +259,9 @@ func _on_ai_state(_available: bool, note: String) -> void:
 		_status.text = note
 
 func _mode_note() -> String:
-	if Narrator.ai_enabled():
-		return "Tryb AI · %s" % Game.settings.get("ai_model", "")
+	match Narrator.provider():
+		"claude":
+			return "Mistrz Gry: Claude (chmura)"
+		"ollama":
+			return "Mistrz Gry: %s (lokalnie)" % Game.settings.get("ai_model", "")
 	return "Tryb offline · narracja proceduralna"

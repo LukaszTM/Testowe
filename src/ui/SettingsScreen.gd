@@ -2,14 +2,15 @@ class_name SettingsScreen
 extends Control
 
 var _mode: OptionButton
+var _claude_key: LineEdit
+var _claude_model: LineEdit
+var _claude_rows: VBoxContainer
 var _host: LineEdit
 var _model: LineEdit
-var _ai_rows: VBoxContainer
+var _ollama_rows: VBoxContainer
 var _dice: OptionButton
 var _res: OptionButton
 var _winmode: OptionButton
-var _music: HSlider
-var _music_val: Label
 var _sfx: CheckButton
 var _scale: HSlider
 var _scale_val: Label
@@ -71,22 +72,6 @@ func _ready() -> void:
 
 	# ——— Dźwięk ———
 	col.add_child(Ui.heading("Dźwięk", 19))
-	col.add_child(Ui.subtle("MUZYKA W TLE", 13))
-	var mrow := HBoxContainer.new()
-	mrow.add_theme_constant_override("separation", 12)
-	col.add_child(mrow)
-	_music = HSlider.new()
-	_music.min_value = 0.0
-	_music.max_value = 1.0
-	_music.step = 0.05
-	_music.value = float(Game.settings.get("music_volume", 0.4))
-	_music.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_music.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_music.value_changed.connect(_on_music_changed)
-	mrow.add_child(_music)
-	_music_val = _value_label("%d%%" % int(round(_music.value * 100)))
-	mrow.add_child(_music_val)
-
 	_sfx = CheckButton.new()
 	_sfx.text = "Dźwięki przycisków"
 	_sfx.button_pressed = bool(Game.settings.get("sfx_on", true))
@@ -125,24 +110,38 @@ func _ready() -> void:
 
 	col.add_child(Ui.hsep())
 
-	# ——— Narracja ———
-	col.add_child(Ui.heading("Narracja", 19))
-	var mode := Ui.dropdown("Tryb narracji", [
-		"Offline — proceduralna (darmowa)", "Online — model językowy (AI)"])
+	# ——— Mistrz Gry ———
+	col.add_child(Ui.heading("Mistrz Gry", 19))
+	var mode := Ui.dropdown("Kto prowadzi opowieść", [
+		"Offline — narracja proceduralna (prosta, darmowa)",
+		"Claude API — pełny Mistrz Gry w chmurze (zalecane)",
+		"Ollama — model lokalny na tym komputerze"])
 	_mode = mode["edit"]
-	_mode.select(1 if Game.settings.get("mode", "offline") == "ai" else 0)
+	_mode.select({"offline": 0, "claude": 1, "ollama": 2, "ai": 2}.get(str(Game.settings.get("mode", "offline")), 0))
 	_mode.item_selected.connect(func(_i): _toggle_ai())
 	col.add_child(mode["row"])
 
-	_ai_rows = VBoxContainer.new()
-	_ai_rows.add_theme_constant_override("separation", 10)
-	col.add_child(_ai_rows)
-	var host := Ui.field("Adres modelu (Ollama)", "http://localhost:11434", Game.settings.get("ai_host", "http://localhost:11434"))
+	_claude_rows = VBoxContainer.new()
+	_claude_rows.add_theme_constant_override("separation", 10)
+	col.add_child(_claude_rows)
+	_claude_rows.add_child(Ui.subtle("Claude API to usługa w chmurze Anthropic — nie stawiasz żadnego serwera i działa niezależnie od Twojego komputera. Klucz wygenerujesz na platform.claude.com (Settings → API keys). Klucz zapisuje się tylko lokalnie, w Twoim katalogu ustawień.", 12))
+	var ckey := Ui.field("Klucz Claude API", "sk-ant-...", Game.settings.get("claude_api_key", ""))
+	_claude_key = ckey["edit"]
+	_claude_key.secret = true
+	_claude_rows.add_child(ckey["row"])
+	var cmodel := Ui.field("Model", "claude-opus-5", Game.settings.get("claude_model", "claude-opus-5"))
+	_claude_model = cmodel["edit"]
+	_claude_rows.add_child(cmodel["row"])
+
+	_ollama_rows = VBoxContainer.new()
+	_ollama_rows.add_theme_constant_override("separation", 10)
+	col.add_child(_ollama_rows)
+	var host := Ui.field("Adres Ollamy", "http://localhost:11434", Game.settings.get("ai_host", "http://localhost:11434"))
 	_host = host["edit"]
-	_ai_rows.add_child(host["row"])
+	_ollama_rows.add_child(host["row"])
 	var model := Ui.field("Nazwa modelu", "np. bielik, llama3", Game.settings.get("ai_model", "bielik"))
 	_model = model["edit"]
-	_ai_rows.add_child(model["row"])
+	_ollama_rows.add_child(model["row"])
 
 	col.add_child(Ui.spacer(10))
 	var row := HBoxContainer.new()
@@ -169,12 +168,6 @@ func _value_label(txt: String) -> Label:
 	l.add_theme_color_override("font_color", Ui.INK_SOFT)
 	return l
 
-func _on_music_changed(v: float) -> void:
-	_music_val.text = "%d%%" % int(round(v * 100))
-	# Podgląd na żywo.
-	Game.settings["music_volume"] = v
-	Audio.apply_settings()
-
 func _current_res_index() -> int:
 	var cur := str(Game.settings.get("resolution", "1280x720"))
 	for i in range(_res_values.size()):
@@ -184,10 +177,14 @@ func _current_res_index() -> int:
 	return 0
 
 func _toggle_ai() -> void:
-	_ai_rows.visible = _mode.selected == 1
+	_claude_rows.visible = _mode.selected == 1
+	_ollama_rows.visible = _mode.selected == 2
 
 func _save() -> void:
-	Game.settings["mode"] = "ai" if _mode.selected == 1 else "offline"
+	Game.settings["mode"] = ["offline", "claude", "ollama"][_mode.selected]
+	Game.settings["claude_api_key"] = _claude_key.text.strip_edges()
+	var cm := _claude_model.text.strip_edges()
+	Game.settings["claude_model"] = cm if cm != "" else "claude-opus-5"
 	Game.settings["ai_host"] = _host.text.strip_edges()
 	Game.settings["ai_model"] = _model.text.strip_edges()
 	Game.settings["dice_mode"] = ["risk", "always", "off"][_dice.selected]
@@ -195,14 +192,12 @@ func _save() -> void:
 	if _res_values.size() > 0:
 		var r: Vector2i = _res_values[clampi(_res.selected, 0, _res_values.size() - 1)]
 		Game.settings["resolution"] = "%dx%d" % [r.x, r.y]
-	Game.settings["music_volume"] = _music.value
 	Game.settings["sfx_on"] = _sfx.button_pressed
 	Game.settings["font_scale"] = _scale.value
 
 	Ui.scale = _scale.value
 	Game.save_settings()
 	Game.apply_display()
-	Audio.apply_settings()
 	if Game.router:
 		(Game.router as Control).theme = Ui.build_theme()
 	Game.router.goto("menu")

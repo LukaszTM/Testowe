@@ -21,11 +21,19 @@ by grać.
   nadaje decyzjom stawkę: od krytycznej porażki po krytyczny sukces.
 - **Kronika** — na bieżąco spisuje odwiedzone miejsca, odkrycia i wątki.
 - **Zapisy** — dowolna liczba kronik zapisywanych lokalnie, do wczytania w każdej chwili.
-- **Dwa tryby narracji:**
-  - *Offline (darmowy)* — pełna rozgrywka bez internetu i bez kluczy API.
-  - *Online (AI)* — swobodna rozmowa z Mistrzem Gry prowadzona przez lokalny
-    model językowy uruchomiony w [Ollamie](https://ollama.com) (np. Bielik).
-    Gdy model jest niedostępny, gra po cichu wraca do trybu offline.
+- **Trzy tryby prowadzenia opowieści:**
+  - *Offline (darmowy)* — prosta narracja proceduralna, bez internetu i kluczy.
+  - *Claude API (zalecany)* — pełny **Mistrz Gry w chmurze**: reaguje na to,
+    co piszesz, tworzy postacie niezależne z imionami i charakterami oraz
+    prowadzi z Tobą ich dialogi. To hostowana usługa Anthropic
+    (api.anthropic.com) — **nie stawiasz żadnego serwera** i działa
+    niezależnie od Twojego komputera; potrzebny jest tylko klucz API
+    z [platform.claude.com](https://platform.claude.com) (usługa płatna za
+    zużycie, klucz zapisuje się wyłącznie lokalnie).
+  - *Ollama* — model językowy uruchomiony lokalnie na Twoim komputerze.
+
+  Gdy wybrany tryb online zawiedzie (brak sieci, zły klucz), gra po cichu
+  dokańcza turę w trybie offline.
 
 ## Uruchomienie z gotowej wersji
 
@@ -65,13 +73,13 @@ src/core/              logika gry (autoloady)
   Narrator.gd          silnik narracji + rzuty kością + tryb AI (Ollama)
   GameState.gd         stan sesji, Kronika, przebieg akcji
   SaveManager.gd       zapis i odczyt kronik
-  Audio.gd             muzyka w tle i dźwięki przycisków
+  Audio.gd             dźwięki przycisków
 src/ui/                interfejs
-  Ui.gd                paleta, czcionka, motyw i fabryki kontrolek
+  Ui.gd                paleta, czcionki, motyw i fabryki kontrolek
   Router.gd            przełączanie ekranów
   MainMenu / WorldCreation / CharacterCreation / PlayScreen / LoadScreen / SettingsScreen
-assets/fonts/          EB Garamond (krój „pisany piórem”, licencja OFL)
-assets/audio/          ścieżka dźwiękowa (theme.wav) i dźwięki przycisków
+assets/fonts/          Great Vibes (tytuł), Almendra (menu), EB Garamond (narracja) — licencja OFL
+assets/audio/          dźwięki przycisków
 icon.svg               ikona aplikacji
 ```
 
@@ -81,15 +89,10 @@ W menu **Ustawienia** można zmienić m.in.:
 
 - **rozdzielczość** — lista jest budowana automatycznie na podstawie ekranu (z oznaczoną rozdzielczością natywną),
 - **tryb okna** — w oknie / bez ramki / pełny ekran,
-- **głośność muzyki** i **dźwięki przycisków**,
+- **dźwięki przycisków**,
+- **Mistrz Gry** — offline / Claude API (chmura) / Ollama (lokalnie),
 - **rzuty kością** — tylko przy starciach i ryzyku (domyślnie), zawsze albo nigdy,
 - **wielkość tekstu**.
-
-## Własna ścieżka dźwiękowa
-
-Domyślną, spokojną pętlę (`assets/audio/theme.wav`) możesz podmienić na własny
-utwór — wystarczy zastąpić ten plik innym `theme.wav` lub `theme.ogg`. Godot
-zapętli go automatycznie. Używaj wyłącznie muzyki, do której masz prawa.
 
 ## Licencja
 
@@ -99,7 +102,7 @@ licencji MIT i nie nakłada opłat licencyjnych ani tantiem od sprzedaży gry.
 
 Dołączone zasoby również nadają się do użytku komercyjnego:
 
-- **Czcionka EB Garamond** — licencja SIL Open Font License 1.1
-  (patrz [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt)).
-- **Dźwięki i muzyka** (`assets/audio/`) — wygenerowane na potrzeby projektu,
+- **Czcionki Great Vibes, Almendra i EB Garamond** — licencja SIL Open Font
+  License 1.1 (patrz [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt)).
+- **Dźwięki** (`assets/audio/`) — wygenerowane na potrzeby projektu,
   możesz ich używać i podmieniać bez ograniczeń.

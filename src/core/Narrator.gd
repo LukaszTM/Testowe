@@ -22,6 +22,7 @@ const FIGHT := ["atak", "uderz", "walcz", "strzel", "ciosem", "dobywam", "tnę",
 
 func _ready() -> void:
 	_http = HTTPRequest.new()
+	_http.timeout = 90.0
 	add_child(_http)
 
 # ——— Tryb offline: rzut kością ———————————————————————————————
@@ -118,52 +119,158 @@ func _period(world: Dictionary) -> String:
 		return " — %s" % year
 	return ""
 
-# ——— Tryb online: lokalny model (Ollama) ————————————————————
+# ——— Tryb online: Mistrz Gry (Claude API w chmurze albo lokalna Ollama) ———
+#
+# Claude API to usługa hostowana przez Anthropic (api.anthropic.com) — nie
+# wymaga żadnego serwera po stronie gracza i działa niezależnie od jego
+# komputera. Potrzebny jest tylko klucz API (platform.claude.com).
+
+const CLAUDE_URL := "https://api.anthropic.com/v1/messages"
+const CLAUDE_VERSION := "2023-06-01"
+const MAX_HISTORY := 30   # ile ostatnich wpisów kroniki trafia do modelu
+
+func provider() -> String:
+	var m := str(Game.settings.get("mode", "offline"))
+	if m == "ai":
+		return "ollama"   # zgodność ze starszymi zapisami ustawień
+	return m
 
 func ai_enabled() -> bool:
-	return Game.settings.get("mode", "offline") == "ai"
+	return provider() != "offline"
 
-# Zwraca tekst narracji z modelu AI albo pusty string, gdy się nie uda.
-# Funkcja jest korutyną (await), więc ekran gry wywołuje ją jednolicie.
-func ai_generate(prompt: String) -> String:
-	var host := str(Game.settings.get("ai_host", "http://localhost:11434"))
-	var model := str(Game.settings.get("ai_model", "bielik"))
-	var url := host.rstrip("/") + "/api/generate"
-	var payload := {"model": model, "prompt": prompt, "stream": false,
-		"options": {"temperature": 0.9}}
-	var headers := ["Content-Type: application/json"]
-	var err := _http.request(url, headers, HTTPClient.METHOD_POST, JSON.stringify(payload))
+# Zwraca odpowiedź Mistrza Gry albo pusty string, gdy się nie uda (wtedy
+# rozgrywka po cichu wraca do trybu offline). Korutyna — wywołuj przez await.
+func ai_generate(world: Dictionary, character: Dictionary, history: Array) -> String:
+	var system := _gm_system(world, character)
+	var messages := _build_messages(history)
+	match provider():
+		"claude":
+			return await _claude_request(system, messages)
+		"ollama":
+			return await _ollama_request(system, messages)
+	return ""
+
+# Rola Mistrza Gry: świat, postacie niezależne i dialogi — nie sam narrator.
+func _gm_system(world: Dictionary, character: Dictionary) -> String:
+	var lines := [
+		"Jesteś Mistrzem Gry prowadzącym tekstową grę fabularną po polsku. Nie jesteś tylko narratorem — odgrywasz cały świat:",
+		"- Twórz i odgrywaj postacie niezależne: nadawaj im imiona, charaktery, własne cele i sekrety. Wprowadzaj je aktywnie do scen.",
+		"- Gdy postać mówi, zapisuj jej wypowiedź w cudzysłowie po imieniu, np.: Marta unosi wzrok znad ksiąg. „Nie powinieneś tu wracać po zmroku.”",
+		"- Reaguj wprost na to, co napisał gracz. Jego decyzje mają konsekwencje, a postacie pamiętają wcześniejsze rozmowy i zachowują się spójnie.",
+		"- Nigdy nie decyduj za postać gracza: nie wkładaj jej słów w usta, nie opisuj jej uczuć ani działań, których gracz nie zadeklarował.",
+		"- Prowadź narrację w drugiej osobie, konkretnie i zmysłowo. Pisz 2–4 krótkie akapity na turę.",
+		"- Trzymaj się gatunku, epoki i ustalonych faktów świata. Główną tajemnicę odsłaniaj powoli, trop po tropie.",
+		"- Kończ turę czymś, co zaprasza do reakcji: pytaniem postaci, napięciem albo wyborem — niekoniecznie wprost pytaniem do gracza.",
+	]
+	lines.append("")
+	lines.append("ŚWIAT „%s” — gatunek: %s; epoka: %s%s; klimat: %s; nadnaturalność: %s; ton: %s." % [
+		world.get("name", ""), Genres.label(world.get("genre_key", "fantasy")),
+		world.get("era", ""),
+		(", rok: " + str(world.get("year", ""))) if str(world.get("year", "")) != "" else "",
+		world.get("climate", ""), world.get("supernatural", ""), world.get("tone", "")])
+	lines.append("GŁÓWNA TAJEMNICA: %s" % world.get("mystery", ""))
+	lines.append("POSTAĆ GRACZA: %s — %s; cechy: %s; cel: %s; słabość: %s." % [
+		character.get("name", ""), character.get("archetype", ""),
+		character.get("traits", ""), character.get("goal", ""), character.get("weakness", "")])
+	if not Game.locations.is_empty():
+		var locs: Array = []
+		for l in Game.locations:
+			locs.append(str(l.get("name", "")))
+		lines.append("ZNANE MIEJSCA: %s." % ", ".join(locs))
+	if not Game.quests.is_empty():
+		var qs: Array = []
+		for q in Game.quests:
+			qs.append(str(q.get("title", "")))
+		lines.append("OTWARTE WĄTKI: %s." % ", ".join(qs))
+	return "\n".join(lines)
+
+# Historia rozmowy w formacie Claude API (role user/assistant).
+# Pierwszy wpis musi mieć rolę "user", więc zaczynamy syntetycznym otwarciem.
+func _build_messages(history: Array) -> Array:
+	var messages: Array = [{"role": "user", "content": "Rozpocznij opowieść w opisanym świecie."}]
+	var start := maxi(0, history.size() - MAX_HISTORY)
+	for i in range(start, history.size()):
+		var e: Dictionary = history[i]
+		var role := "user" if e.get("role") == "player" else "assistant"
+		var text := str(e.get("text", "")).strip_edges()
+		if text != "":
+			messages.append({"role": role, "content": text})
+	return messages
+
+# ——— Claude API (chmura, bez własnego serwera) ————————————————
+
+func _claude_request(system: String, messages: Array) -> String:
+	var key := str(Game.settings.get("claude_api_key", "")).strip_edges()
+	if key == "":
+		emit_signal("ai_state", false, "Brak klucza Claude API — wpisz go w Ustawieniach. Gram w trybie offline.")
+		return ""
+	var payload := {
+		"model": str(Game.settings.get("claude_model", "claude-opus-5")),
+		"max_tokens": 1024,
+		"system": system,
+		"messages": messages,
+	}
+	var headers := [
+		"content-type: application/json",
+		"x-api-key: " + key,
+		"anthropic-version: " + CLAUDE_VERSION,
+	]
+	var err := _http.request(CLAUDE_URL, headers, HTTPClient.METHOD_POST, JSON.stringify(payload))
 	if err != OK:
-		emit_signal("ai_state", false, "Nie udało się połączyć z modelem — przełączam na tryb offline.")
+		emit_signal("ai_state", false, "Nie udało się połączyć z Claude API — tryb offline.")
 		return ""
 	var res: Array = await _http.request_completed
-	# res = [result, response_code, headers, body]
+	var code := int(res[1])
+	var body := (res[3] as PackedByteArray).get_string_from_utf8()
+	if code == 401:
+		emit_signal("ai_state", false, "Claude API odrzuciło klucz (401) — sprawdź go w Ustawieniach.")
+		return ""
+	if code == 429:
+		emit_signal("ai_state", false, "Limit zapytań Claude API (429) — spróbuj za chwilę.")
+		return ""
+	if code != 200:
+		emit_signal("ai_state", false, "Claude API zwróciło błąd %d — tryb offline." % code)
+		return ""
+	var parsed = JSON.parse_string(body)
+	if typeof(parsed) != TYPE_DICTIONARY:
+		emit_signal("ai_state", false, "Nieczytelna odpowiedź Claude API — tryb offline.")
+		return ""
+	if str(parsed.get("stop_reason", "")) == "refusal":
+		emit_signal("ai_state", false, "Model odmówił odpowiedzi na tę akcję — tryb offline dla tej tury.")
+		return ""
+	var out := ""
+	for block in parsed.get("content", []):
+		if typeof(block) == TYPE_DICTIONARY and block.get("type") == "text":
+			out += str(block.get("text", ""))
+	out = out.strip_edges()
+	if out != "":
+		emit_signal("ai_state", true, "Mistrz Gry: Claude (chmura)")
+	return out
+
+# ——— Ollama (model lokalny na komputerze gracza) ———————————————
+
+func _ollama_request(system: String, messages: Array) -> String:
+	var host := str(Game.settings.get("ai_host", "http://localhost:11434"))
+	var model := str(Game.settings.get("ai_model", "bielik"))
+	var flat: Array = []
+	for m in messages:
+		var who := "GRACZ" if m.get("role") == "user" else "MISTRZ GRY"
+		flat.append("%s: %s" % [who, m.get("content", "")])
+	var prompt := "%s\n\nDOTYCHCZAS:\n%s\n\nMISTRZ GRY:" % [system, "\n".join(flat)]
+	var payload := {"model": model, "prompt": prompt, "stream": false,
+		"options": {"temperature": 0.9}}
+	var err := _http.request(host.rstrip("/") + "/api/generate",
+		["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(payload))
+	if err != OK:
+		emit_signal("ai_state", false, "Nie udało się połączyć z Ollamą — tryb offline.")
+		return ""
+	var res: Array = await _http.request_completed
 	if int(res[1]) != 200:
-		emit_signal("ai_state", false, "Model odpowiedział błędem %d — używam trybu offline." % int(res[1]))
+		emit_signal("ai_state", false, "Ollama zwróciła błąd %d — tryb offline." % int(res[1]))
 		return ""
 	var parsed = JSON.parse_string((res[3] as PackedByteArray).get_string_from_utf8())
 	if typeof(parsed) == TYPE_DICTIONARY and parsed.has("response"):
-		emit_signal("ai_state", true, "Narrację prowadzi model „%s”." % model)
+		emit_signal("ai_state", true, "Mistrz Gry: %s (lokalnie)" % model)
 		return str(parsed["response"]).strip_edges()
-	emit_signal("ai_state", false, "Nieczytelna odpowiedź modelu — tryb offline.")
+	emit_signal("ai_state", false, "Nieczytelna odpowiedź Ollamy — tryb offline.")
 	return ""
-
-# Buduje polecenie dla modelu z kontekstu świata, postaci i ostatnich wersów.
-func build_prompt(world: Dictionary, character: Dictionary, history: Array, action: String) -> String:
-	var recent: Array = []
-	var start := maxi(0, history.size() - 6)
-	for i in range(start, history.size()):
-		var e: Dictionary = history[i]
-		var who := "GRACZ" if e.get("role") == "player" else "NARRATOR"
-		recent.append("%s: %s" % [who, e.get("text", "")])
-	var sys := """Jesteś Mistrzem Gry w tekstowej grze fabularnej. Prowadź narrację po polsku,
-w drugiej osobie, żywo i konkretnie. Nie decyduj za gracza. Zakończ pytaniem o jego kolejny ruch.
-Trzymaj się konwencji świata i nie łam ustalonych realiów."""
-	var setting := "ŚWIAT: %s | gatunek: %s | epoka: %s | rok: %s | ton: %s | tajemnica: %s" % [
-		world.get("name", ""), Genres.label(world.get("genre_key", "fantasy")),
-		world.get("era", ""), world.get("year", ""), world.get("tone", ""), world.get("mystery", "")]
-	var hero := "POSTAĆ: %s — %s | cel: %s | słabość: %s" % [
-		character.get("name", ""), character.get("archetype", ""),
-		character.get("goal", ""), character.get("weakness", "")]
-	return "%s\n\n%s\n%s\n\nDOTYCHCZAS:\n%s\n\nGRACZ: %s\n\nNARRATOR:" % [
-		sys, setting, hero, "\n".join(recent), action]

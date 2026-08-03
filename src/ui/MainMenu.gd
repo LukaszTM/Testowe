@@ -12,7 +12,7 @@ func _ready() -> void:
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	center.add_child(col)
 
-	var t := Ui.title("KRONIKARZ")
+	var t := Ui.script_title("Kronikarz")
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(t)
 

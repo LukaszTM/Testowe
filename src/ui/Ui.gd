@@ -21,9 +21,11 @@ const GREEN     := Color("7f9c5a")
 # Globalna skala czcionki (ustawiana z GameState wg ustawień gracza).
 static var scale: float = 1.0
 
-static var _f_regular: FontFile
+static var _f_regular: FontFile   # EB Garamond — tekst ciągły, narracja
 static var _f_medium: FontFile
 static var _f_bold: FontFile
+static var _f_quill: FontFile     # Almendra — nagłówki i przyciski (rysowana piórem)
+static var _f_script: FontFile    # Great Vibes — kaligrafia do wielkiego tytułu
 static var _fonts_tried := false
 
 static func _load_fonts() -> void:
@@ -33,6 +35,8 @@ static func _load_fonts() -> void:
 	_f_regular = _try_font("res://assets/fonts/EBGaramond-Regular.ttf")
 	_f_medium = _try_font("res://assets/fonts/EBGaramond-Medium.ttf")
 	_f_bold = _try_font("res://assets/fonts/EBGaramond-Bold.ttf")
+	_f_quill = _try_font("res://assets/fonts/Almendra-Regular.ttf")
+	_f_script = _try_font("res://assets/fonts/GreatVibes-Regular.ttf")
 
 static func _try_font(path: String) -> FontFile:
 	if ResourceLoader.exists(path):
@@ -77,8 +81,10 @@ static func build_theme() -> Theme:
 	t.set_color("font_hover_color", "Button", GOLD)
 	t.set_color("font_pressed_color", "Button", Color.WHITE)
 	t.set_color("font_disabled_color", "Button", MUTED)
-	t.set_font_size("font_size", "Button", base)
-	if _f_medium:
+	t.set_font_size("font_size", "Button", fs(19))
+	if _f_quill:
+		t.set_font("font", "Button", _f_quill)
+	elif _f_medium:
 		t.set_font("font", "Button", _f_medium)
 
 	for tp in ["LineEdit", "TextEdit"]:
@@ -116,7 +122,21 @@ static func build_theme() -> Theme:
 static func title(txt: String, size := 44) -> Label:
 	var l := Label.new()
 	l.text = txt
-	if _f_bold:
+	if _f_quill:
+		l.add_theme_font_override("font", _f_quill)
+	elif _f_bold:
+		l.add_theme_font_override("font", _f_bold)
+	l.add_theme_font_size_override("font_size", fs(size))
+	l.add_theme_color_override("font_color", GOLD)
+	return l
+
+# Wielki, kaligraficzny tytuł (jak podpis piórem) — do menu głównego.
+static func script_title(txt: String, size := 82) -> Label:
+	var l := Label.new()
+	l.text = txt
+	if _f_script:
+		l.add_theme_font_override("font", _f_script)
+	elif _f_bold:
 		l.add_theme_font_override("font", _f_bold)
 	l.add_theme_font_size_override("font_size", fs(size))
 	l.add_theme_color_override("font_color", GOLD)
@@ -125,7 +145,9 @@ static func title(txt: String, size := 44) -> Label:
 static func heading(txt: String, size := 22) -> Label:
 	var l := Label.new()
 	l.text = txt
-	if _f_bold:
+	if _f_quill:
+		l.add_theme_font_override("font", _f_quill)
+	elif _f_bold:
 		l.add_theme_font_override("font", _f_bold)
 	l.add_theme_font_size_override("font_size", fs(size))
 	l.add_theme_color_override("font_color", INK)

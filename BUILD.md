@@ -47,15 +47,21 @@ W edytorze dodaj preset *macOS* (analogicznie do istniejących), a następnie:
 godot --headless --export-release "macOS" dist/Kronikarz.zip
 ```
 
-## Uwaga o trybie AI
+## Uwaga o trybach Mistrza Gry
 
-Tryb online korzysta z lokalnego modelu przez [Ollamę](https://ollama.com).
-Nie jest wymagany do gry — offline działa w pełni samodzielnie. Aby włączyć AI:
+Żaden tryb online nie jest wymagany — offline działa w pełni samodzielnie.
+
+**Claude API (zalecany):** hostowana usługa Anthropic — nie stawiasz żadnego
+serwera. Wygeneruj klucz API na [platform.claude.com](https://platform.claude.com)
+(Settings → API keys), a w grze: *Ustawienia → Mistrz Gry → Claude API* i wklej
+klucz. Usługa jest płatna za zużycie tokenów.
+
+**Ollama (model lokalny):**
 
 ```bash
 ollama pull bielik        # lub inny model, np. llama3 / mistral
 ollama serve
 ```
 
-Następnie w grze: *Ustawienia → Tryb narracji → Online (AI)* i wskaż adres
+Następnie w grze: *Ustawienia → Mistrz Gry → Ollama* i wskaż adres
 (domyślnie `http://localhost:11434`) oraz nazwę modelu.

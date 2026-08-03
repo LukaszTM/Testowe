@@ -19,13 +19,14 @@ var rng := RandomNumberGenerator.new()
 var started := false
 
 var settings: Dictionary = {
-	"mode": "offline",                    # "offline" albo "ai"
-	"ai_host": "http://localhost:11434",
+	"mode": "offline",                    # "offline" / "claude" / "ollama"
+	"claude_api_key": "",                 # klucz z platform.claude.com
+	"claude_model": "claude-opus-5",
+	"ai_host": "http://localhost:11434",  # Ollama (model lokalny)
 	"ai_model": "bielik",
 	"font_scale": 1.0,
 	"resolution": "1280x720",             # "SZERxWYS"
 	"window_mode": "windowed",            # "windowed" / "borderless" / "fullscreen"
-	"music_volume": 0.4,                  # 0.0 – 1.0
 	"sfx_on": true,
 	"dice_mode": "risk",                  # "risk" / "always" / "off"
 }
@@ -132,8 +133,8 @@ func take_action(action: String) -> void:
 	var roll := {}
 
 	if Narrator.ai_enabled():
-		var prompt := Narrator.build_prompt(world, character, history, action)
-		text = await Narrator.ai_generate(prompt)
+		# Akcja gracza jest już ostatnim wpisem historii.
+		text = await Narrator.ai_generate(world, character, history)
 
 	if text == "":
 		# Tryb offline (także fallback, gdy AI zawiedzie).

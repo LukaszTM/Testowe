@@ -78,11 +78,15 @@ func _ready() -> void:
 func _build_topbar() -> Control:
 	var bar := HBoxContainer.new()
 	bar.add_theme_constant_override("separation", 12)
+	bar.custom_minimum_size = Vector2(0, 46)
 
-	var title := Ui.heading(Game.world.get("name", "Kronika"), 22)
+	# W poziomym pasku etykiety NIE mogą mieć autozawijania — inaczej Godot
+	# zwęża je do jednej litery i rozdmuchuje wysokość całego paska.
+	var title := _plain(Game.world.get("name", "Kronika"), 22, Ui.INK)
+	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bar.add_child(title)
 
-	var tag := Ui.subtle("· %s" % Game.world.get("genre_label", ""), 15)
+	var tag := _plain("· %s" % Game.world.get("genre_label", ""), 15, Ui.MUTED)
 	tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bar.add_child(tag)
 
@@ -90,20 +94,30 @@ func _build_topbar() -> Control:
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.add_child(gap)
 
-	_status = Ui.subtle(_mode_note(), 13)
+	_status = _plain(_mode_note(), 13, Ui.MUTED)
 	_status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bar.add_child(_status)
 
 	var save := Ui.button("Zapisz")
 	save.custom_minimum_size = Vector2(110, 40)
+	save.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	save.pressed.connect(_on_save)
 	bar.add_child(save)
 
 	var menu := Ui.button("Menu")
 	menu.custom_minimum_size = Vector2(90, 40)
+	menu.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	menu.pressed.connect(func(): Game.router.goto("menu"))
 	bar.add_child(menu)
 	return bar
+
+# Etykieta bez zawijania — do poziomego paska.
+func _plain(txt: String, size: int, col: Color) -> Label:
+	var l := Label.new()
+	l.text = txt
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", col)
+	return l
 
 func _build_action_bar() -> Control:
 	var box := VBoxContainer.new()

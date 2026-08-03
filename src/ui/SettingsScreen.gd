@@ -16,6 +16,10 @@ var _sfx: CheckButton
 var _scale: HSlider
 var _scale_val: Label
 
+# [DEV] Test API — do usunięcia w wersji finalnej.
+var _test_btn: Button
+var _test_result: Label
+
 var _res_values: Array = []
 
 func _ready() -> void:
@@ -138,6 +142,21 @@ func _ready() -> void:
 	_claude_model = cmodel["edit"]
 	_claude_rows.add_child(cmodel["row"])
 
+	# [DEV] Przycisk testu połączenia — do usunięcia w wersji finalnej
+	# (razem z Narrator.dev_test_claude i polami _test_btn/_test_result).
+	var trow := HBoxContainer.new()
+	trow.add_theme_constant_override("separation", 12)
+	_claude_rows.add_child(trow)
+	_test_btn = Ui.button("Testuj połączenie")
+	_test_btn.custom_minimum_size = Vector2(220, Ui.fs(42))
+	_test_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_test_btn.pressed.connect(_on_test_api)
+	trow.add_child(_test_btn)
+	_test_result = Ui.subtle("", 13)
+	_test_result.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_test_result.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	trow.add_child(_test_result)
+
 	_ollama_rows = VBoxContainer.new()
 	_ollama_rows.add_theme_constant_override("separation", 10)
 	col.add_child(_ollama_rows)
@@ -184,6 +203,18 @@ func _current_res_index() -> int:
 func _toggle_ai() -> void:
 	_claude_rows.visible = _mode.selected == 1
 	_ollama_rows.visible = _mode.selected == 2
+
+# [DEV] Obsługa testu API — do usunięcia w wersji finalnej.
+func _on_test_api() -> void:
+	_test_btn.disabled = true
+	_test_result.add_theme_color_override("font_color", Ui.MUTED)
+	_test_result.text = "Testuję połączenie…"
+	var r: Dictionary = await Narrator.dev_test_claude(
+		_claude_key.text, _claude_url.text, _claude_model.text)
+	_test_result.text = str(r.get("note", ""))
+	_test_result.add_theme_color_override("font_color",
+		Ui.GREEN if bool(r.get("ok", false)) else Ui.OXIDE)
+	_test_btn.disabled = false
 
 func _save() -> void:
 	Game.settings["mode"] = ["offline", "claude", "ollama"][_mode.selected]

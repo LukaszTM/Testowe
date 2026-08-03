@@ -258,6 +258,77 @@ func _claude_request(system: String, messages: Array) -> String:
 		emit_signal("ai_state", true, "Mistrz Gry: Claude (chmura)")
 	return out
 
+# ——— [DEV] Test połączenia z Claude API ————————————————————————
+#
+# UWAGA: narzędzie deweloperskie, do usunięcia w wersji finalnej gry
+# (razem z przyciskiem „Testuj połączenie” w SettingsScreen.gd).
+# Wysyła minimalne zapytanie i zwraca {ok: bool, note: String}.
+func dev_test_claude(key: String, base: String, model: String) -> Dictionary:
+	key = key.strip_edges()
+	base = base.strip_edges().rstrip("/")
+	if base == "":
+		base = CLAUDE_DEFAULT_BASE
+	if key == "":
+		return {"ok": false, "note": "Wpisz najpierw klucz API."}
+	model = model.strip_edges()
+	if model == "":
+		model = "claude-opus-5"
+
+	# Osobny HTTPRequest, żeby test nie kolidował z turą rozgrywki.
+	var http := HTTPRequest.new()
+	http.timeout = 30.0
+	add_child(http)
+	var payload := {
+		"model": model,
+		"max_tokens": 24,
+		"messages": [{"role": "user", "content": "Odpowiedz dokładnie jednym słowem: OK"}],
+	}
+	var headers := [
+		"content-type: application/json",
+		"anthropic-version: " + CLAUDE_VERSION,
+		"x-api-key: " + key,
+	]
+	if not base.contains("api.anthropic.com"):
+		headers.append("Authorization: Bearer " + key)
+	var err := http.request(base + "/v1/messages", headers, HTTPClient.METHOD_POST, JSON.stringify(payload))
+	if err != OK:
+		http.queue_free()
+		return {"ok": false, "note": "Nie udało się wysłać zapytania — sprawdź adres API."}
+	var res: Array = await http.request_completed
+	http.queue_free()
+	var result := int(res[0])
+	var code := int(res[1])
+	var body := (res[3] as PackedByteArray).get_string_from_utf8()
+
+	if result != HTTPRequest.RESULT_SUCCESS:
+		return {"ok": false, "note": "Brak odpowiedzi serwera — sprawdź adres API i połączenie z internetem."}
+	if code == 200:
+		var parsed = JSON.parse_string(body)
+		if typeof(parsed) == TYPE_DICTIONARY:
+			var out := ""
+			for b in parsed.get("content", []):
+				if typeof(b) == TYPE_DICTIONARY and b.get("type") == "text":
+					out += str(b.get("text", ""))
+			var served := str(parsed.get("model", model))
+			return {"ok": true, "note": "Połączenie działa ✓  Model %s odpowiedział: „%s”" % [served, out.strip_edges().left(40)]}
+		return {"ok": true, "note": "Połączenie działa ✓ (kod 200)"}
+
+	var msg := ""
+	var parsed_err = JSON.parse_string(body)
+	if typeof(parsed_err) == TYPE_DICTIONARY:
+		var e = parsed_err.get("error", {})
+		if typeof(e) == TYPE_DICTIONARY:
+			msg = str(e.get("message", ""))
+	if msg == "":
+		msg = body.left(120)
+	var hint := ""
+	match code:
+		401: hint = " (klucz odrzucony — sprawdź go)"
+		403: hint = " (brak uprawnień — sprawdź konto/saldo)"
+		404: hint = " (zły adres API albo nieznany model)"
+		429: hint = " (limit zapytań — spróbuj za chwilę)"
+	return {"ok": false, "note": "Błąd %d%s. %s" % [code, hint, msg.left(160)]}
+
 # ——— Ollama (model lokalny na komputerze gracza) ———————————————
 
 func _ollama_request(system: String, messages: Array) -> String:

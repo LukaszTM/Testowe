@@ -76,3 +76,50 @@ func load_into_game(path: String) -> bool:
 func delete_save(path: String) -> void:
 	if FileAccess.file_exists(path):
 		DirAccess.remove_absolute(path)
+
+# ——— Magazyn postaci (user://postacie) ————————————————————————
+# Postacie gracza zapisują się osobno od kronik, żeby można było ich użyć
+# ponownie w kolejnych opowieściach — razem z poziomem i atrybutami.
+
+const CHAR_DIR := "user://postacie"
+
+func save_character(c: Dictionary) -> void:
+	if str(c.get("name", "")).strip_edges() == "":
+		return
+	DirAccess.make_dir_recursive_absolute(CHAR_DIR)
+	var snapshot := c.duplicate(true)
+	snapshot.erase("dead")
+	var f := FileAccess.open("%s/%s.json" % [CHAR_DIR, _slug(c["name"])], FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(snapshot, "\t"))
+		f.close()
+
+func list_characters() -> Array:
+	var out: Array = []
+	var d := DirAccess.open(CHAR_DIR)
+	if not d:
+		return out
+	for fname in d.get_files():
+		if not fname.ends_with(".json"):
+			continue
+		var path := "%s/%s" % [CHAR_DIR, fname]
+		var c := load_character(path)
+		if c.is_empty():
+			continue
+		out.append({
+			"path": path,
+			"name": c.get("name", "?"),
+			"gender": c.get("gender", ""),
+			"archetype": c.get("archetype", ""),
+			"level": int(c.get("level", 1)),
+		})
+	out.sort_custom(func(a, b): return str(a["name"]) < str(b["name"]))
+	return out
+
+func load_character(path: String) -> Dictionary:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if not f:
+		return {}
+	var parsed = JSON.parse_string(f.get_as_text())
+	f.close()
+	return parsed if typeof(parsed) == TYPE_DICTIONARY else {}

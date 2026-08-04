@@ -48,10 +48,6 @@ func _ready() -> void:
 	_f["tone"] = _add(col, Ui.field("Ton opowieści", "np. mroczny, przygodowy, kameralny"))
 	_f["start_location"] = _add(col, Ui.field("Lokacja startowa", "gdzie zaczyna się historia"))
 
-	var myst := Ui.text_field("Główna tajemnica", "Zagadka, wokół której obraca się opowieść", 90)
-	_f["mystery"] = myst["edit"]
-	col.add_child(myst["row"])
-
 	col.add_child(Ui.spacer(8))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
@@ -88,7 +84,6 @@ func _apply_template(index: int) -> void:
 	_f["supernatural"].text = t.get("supernatural", "")
 	_f["tone"].text = t.get("tone", "")
 	_f["start_location"].text = t.get("start_location", "")
-	_f["mystery"].text = t.get("mystery", "")
 
 func _restore() -> void:
 	var w := Game.world
@@ -99,7 +94,6 @@ func _restore() -> void:
 	_f["supernatural"].text = w.get("supernatural", "")
 	_f["tone"].text = w.get("tone", "")
 	_f["start_location"].text = w.get("start_location", "")
-	_f["mystery"].text = w.get("mystery", "")
 	_f["genre"].select(Genres.ORDER.find(w.get("genre_key", "fantasy")))
 
 func _go_next() -> void:
@@ -117,6 +111,6 @@ func _go_next() -> void:
 		"supernatural": _f["supernatural"].text.strip_edges(),
 		"tone": _f["tone"].text.strip_edges(),
 		"start_location": _f["start_location"].text.strip_edges(),
-		"mystery": _f["mystery"].text.strip_edges(),
+		"mystery": "",
 	}
 	Game.router.goto("character")

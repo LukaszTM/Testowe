@@ -20,6 +20,16 @@ by grać.
 - **System scen z rzutem kością** — każde działanie rozstrzyga rzut, który
   nadaje decyzjom stawkę: od krytycznej porażki po krytyczny sukces.
 - **Kronika** — na bieżąco spisuje odwiedzone miejsca, odkrycia i wątki.
+- **Karta bohatera** — zdrowie, mana (w światach z nadnaturalnością), punkty
+  doświadczenia i poziomy; przy awansie rozdajesz punkty atrybutów (Siła,
+  Zręczność, Intelekt, Charyzma), które wzmacniają rzuty kością.
+- **Postacie** — wybór płci, archetypy w formach męskich i żeńskich (plus
+  własny), avatar z dysku, a także **magazyn postaci**: bohaterowie zapisują
+  się między opowieściami razem z poziomem i atrybutami.
+- **Biblioteka postaci niezależnych** — w trybie Mistrza Gry AI spotkane
+  postacie (z imionami nadawanymi przez MG) trafiają do Kroniki wraz z krótkim
+  opisem relacji i uczuć wobec bohatera; każda dostaje proceduralny
+  medalion-portret.
 - **Zapisy** — dowolna liczba kronik zapisywanych lokalnie, do wczytania w każdej chwili.
 - **Trzy tryby prowadzenia opowieści:**
   - *Offline (darmowy)* — prosta narracja proceduralna, bez internetu i kluczy.

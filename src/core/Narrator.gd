@@ -152,26 +152,53 @@ func ai_generate(world: Dictionary, character: Dictionary, history: Array) -> St
 
 # Rola Mistrza Gry: świat, postacie niezależne i dialogi — nie sam narrator.
 func _gm_system(world: Dictionary, character: Dictionary) -> String:
+	var has_mana: bool = Game.world_has_mana()
+	var is_female := str(character.get("gender", "")) == "Kobieta"
 	var lines := [
-		"Jesteś Mistrzem Gry prowadzącym tekstową grę fabularną po polsku. Nie jesteś tylko narratorem — odgrywasz cały świat:",
-		"- Twórz i odgrywaj postacie niezależne: nadawaj im imiona, charaktery, własne cele i sekrety. Wprowadzaj je aktywnie do scen.",
-		"- Gdy postać mówi, zapisuj jej wypowiedź w cudzysłowie po imieniu, np.: Marta unosi wzrok znad ksiąg. „Nie powinieneś tu wracać po zmroku.”",
-		"- Reaguj wprost na to, co napisał gracz. Jego decyzje mają konsekwencje, a postacie pamiętają wcześniejsze rozmowy i zachowują się spójnie.",
+		"Jesteś Mistrzem Gry prowadzącym tekstową grę fabularną po polsku. Nie jesteś tylko narratorem — odgrywasz cały świat.",
+		"",
+		"JĘZYK I STYL:",
+		"- Pisz naturalną, literacką polszczyzną. Bezbłędnie odmieniaj imiona, nazwy i wszystkie wyrazy przez przypadki.",
+		"- Nie powtarzaj słów ani sformułowań użytych przez gracza — opisuj skutki jego działań własnymi słowami, sięgaj po synonimy.",
+		"- Unikaj powtarzania tych samych zwrotów i konstrukcji w kolejnych turach.",
+		"",
+		"PROWADZENIE ŚWIATA:",
+		"- Twórz postacie niezależne i KAŻDEJ nadawaj imię od razu przy pierwszym pojawieniu (chyba że gracz nazwał ją pierwszy) oraz wyrazisty charakter, własne cele i sekrety.",
+		"- Gdy postać mówi, zapisuj wypowiedź w cudzysłowie po imieniu, np.: Marta unosi wzrok znad ksiąg. „Nie powinieneś tu wracać po zmroku.”",
+		"- Reaguj wprost na to, co napisał gracz. Decyzje mają konsekwencje, a postacie pamiętają wcześniejsze rozmowy i zachowują się spójnie.",
 		"- Nigdy nie decyduj za postać gracza: nie wkładaj jej słów w usta, nie opisuj jej uczuć ani działań, których gracz nie zadeklarował.",
 		"- Prowadź narrację w drugiej osobie, konkretnie i zmysłowo. Pisz 2–4 krótkie akapity na turę.",
-		"- Trzymaj się gatunku, epoki i ustalonych faktów świata. Główną tajemnicę odsłaniaj powoli, trop po tropie.",
-		"- Kończ turę czymś, co zaprasza do reakcji: pytaniem postaci, napięciem albo wyborem — niekoniecznie wprost pytaniem do gracza.",
+		"- Trzymaj się gatunku, epoki i ustalonych faktów świata.",
+		"- Kończ turę czymś, co zaprasza do reakcji: pytaniem postaci, napięciem albo wyborem.",
 	]
+	lines.append("- Postać gracza to %s — konsekwentnie używaj %s form gramatycznych, zwracając się do niej." % [
+		"kobieta" if is_female else "mężczyzna",
+		"żeńskich" if is_female else "męskich"])
+	if has_mana:
+		lines.append("- W tym świecie istnieje nadnaturalna moc. Użycie jej przez gracza kosztuje Manę — uwzględniaj to w bloku stanu.")
 	lines.append("")
 	lines.append("ŚWIAT „%s” — gatunek: %s; epoka: %s%s; klimat: %s; nadnaturalność: %s; ton: %s." % [
 		world.get("name", ""), Genres.label(world.get("genre_key", "fantasy")),
 		world.get("era", ""),
 		(", rok: " + str(world.get("year", ""))) if str(world.get("year", "")) != "" else "",
 		world.get("climate", ""), world.get("supernatural", ""), world.get("tone", "")])
-	lines.append("GŁÓWNA TAJEMNICA: %s" % world.get("mystery", ""))
-	lines.append("POSTAĆ GRACZA: %s — %s; cechy: %s; cel: %s; słabość: %s." % [
-		character.get("name", ""), character.get("archetype", ""),
+	if str(world.get("mystery", "")).strip_edges() != "":
+		lines.append("TŁO FABULARNE: %s" % world.get("mystery", ""))
+	var attrs: Dictionary = character.get("attrs", {})
+	lines.append("POSTAĆ GRACZA: %s (%s) — %s; cechy: %s; cel: %s; słabość: %s." % [
+		character.get("name", ""), character.get("gender", ""), character.get("archetype", ""),
 		character.get("traits", ""), character.get("goal", ""), character.get("weakness", "")])
+	lines.append("STATYSTYKI GRACZA: poziom %d; Siła %d, Zręczność %d, Intelekt %d, Charyzma %d; Zdrowie %d/%d%s." % [
+		int(character.get("level", 1)),
+		int(attrs.get("sila", 5)), int(attrs.get("zrecznosc", 5)),
+		int(attrs.get("intelekt", 5)), int(attrs.get("charyzma", 5)),
+		int(character.get("hp", 100)), int(character.get("hp_max", 100)),
+		("; Mana %d/%d" % [int(character.get("mana", 0)), int(character.get("mana_max", 0))]) if has_mana else ""])
+	if not Game.npcs.is_empty():
+		var known: Array = []
+		for n in Game.npcs.slice(0, 12):
+			known.append("%s (%s)" % [n.get("imie", ""), n.get("relacja", "")])
+		lines.append("POZNANE POSTACIE: %s." % "; ".join(known))
 	if not Game.locations.is_empty():
 		var locs: Array = []
 		for l in Game.locations:
@@ -182,7 +209,32 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 		for q in Game.quests:
 			qs.append(str(q.get("title", "")))
 		lines.append("OTWARTE WĄTKI: %s." % ", ".join(qs))
+	lines.append("")
+	lines.append("BLOK STANU — na samym końcu KAŻDEJ odpowiedzi dodaj dokładnie jedną linię (gracz jej nie zobaczy; nie wspominaj o niej w narracji):")
+	lines.append('###STAN {"postacie":[{"imie":"Marta","plec":"kobieta","rola":"zielarka","relacja":"nieufna, ale zaciekawiona graczem"}],"hp":0,"mana":0,"pd":10}')
+	lines.append("- postacie: wszystkie postacie niezależne obecne w tej scenie; w polu relacja krótko opisz aktualne uczucia i powiązania z graczem.")
+	lines.append("- hp: zmiana Zdrowia gracza w tej turze (ujemna przy obrażeniach; zwykle 0).")
+	lines.append("- mana: zmiana Many gracza (ujemna przy użyciu mocy%s)." % ("" if has_mana else "; w tym świecie zawsze 0"))
+	lines.append("- pd: punkty doświadczenia za tę turę — 5–15 za zwykłe działania, do 30 za brawurowe, sprytne lub przełomowe.")
+	lines.append("- To czysty JSON w jednej linii, bez bloku kodu i bez dodatkowego tekstu po nim.")
 	return "\n".join(lines)
+
+# Wycina blok ###STAN z odpowiedzi modelu. Zwraca {text, state}.
+func parse_state(text: String) -> Dictionary:
+	var idx := text.rfind("###STAN")
+	if idx == -1:
+		return {"text": text.strip_edges(), "state": {}}
+	var clean := text.substr(0, idx).strip_edges()
+	var raw := text.substr(idx + 7).strip_edges()
+	# Model czasem opakowuje JSON w znaczniki kodu — zdejmij je.
+	raw = raw.trim_prefix("```json").trim_prefix("```").trim_suffix("```").strip_edges()
+	var brace := raw.find("{")
+	if brace >= 0:
+		raw = raw.substr(brace)
+	var parsed = JSON.parse_string(raw)
+	if typeof(parsed) != TYPE_DICTIONARY:
+		parsed = {}
+	return {"text": clean, "state": parsed}
 
 # Historia rozmowy w formacie Claude API (role user/assistant).
 # Pierwszy wpis musi mieć rolę "user", więc zaczynamy syntetycznym otwarciem.

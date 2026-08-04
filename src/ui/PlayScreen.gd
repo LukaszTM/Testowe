@@ -165,7 +165,7 @@ func _rebuild_suggestions() -> void:
 		grid.add_child(chip)
 
 func _submit(text: String) -> void:
-	if _busy:
+	if _busy or bool(Game.character.get("dead", false)):
 		return
 	text = text.strip_edges()
 	if text == "":
@@ -180,9 +180,12 @@ func _submit(text: String) -> void:
 
 func _set_busy(b: bool) -> void:
 	_busy = b
-	_send.disabled = b
-	_input.editable = not b
-	if b and Narrator.ai_enabled():
+	var dead := bool(Game.character.get("dead", false))
+	_send.disabled = b or dead
+	_input.editable = not b and not dead
+	if dead:
+		_status.text = "Kronika dobiegła końca"
+	elif b and Narrator.ai_enabled():
 		_status.text = "Mistrz Gry myśli…"
 	else:
 		_status.text = _mode_note()
@@ -212,6 +215,12 @@ func _scroll_to_bottom() -> void:
 func _refresh() -> void:
 	_render_log()
 	_render_chronicle()
+	# Po śmierci bohatera kronika jest zamknięta.
+	if bool(Game.character.get("dead", false)):
+		_input.editable = false
+		_send.disabled = true
+		_suggest_box.visible = false
+		_status.text = "Kronika dobiegła końca"
 
 func _render_chronicle() -> void:
 	for c in _chronicle.get_children():
@@ -221,16 +230,88 @@ func _render_chronicle() -> void:
 	_chronicle.add_child(Ui.subtle("Tura %d" % Game.turn, 13))
 	_chronicle.add_child(Ui.hsep())
 
-	# Postać.
-	_chronicle.add_child(Ui.subtle("BOHATER", 12))
-	_chronicle.add_child(Ui.body("%s — %s" % [Game.character.get("name", "?"), Game.character.get("archetype", "")]))
-	if Game.character.get("goal", "") != "":
-		_chronicle.add_child(Ui.subtle("Cel: %s" % Game.character["goal"], 13))
-	_chronicle.add_child(Ui.hsep())
+	_render_hero_card()
+	_render_npcs()
 
 	_section("MIEJSCA", Game.locations, func(x): return x["name"], func(x): return x.get("note", ""))
 	_section("ODKRYCIA", Game.discoveries, func(x): return x["title"], func(x): return x.get("type", ""))
 	_section("WĄTKI", Game.quests, func(x): return x["title"], func(x): return x.get("note", ""))
+
+# ——— Karta bohatera: avatar, zdrowie, mana, poziom, atrybuty ————————
+
+func _render_hero_card() -> void:
+	var c := Game.character
+	Game.ensure_character_stats()
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	_chronicle.add_child(head)
+	head.add_child(Ui.avatar_or_medallion(c, 52))
+	var hv := VBoxContainer.new()
+	hv.add_theme_constant_override("separation", 2)
+	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(hv)
+	hv.add_child(Ui.heading(str(c.get("name", "?")), 18))
+	hv.add_child(Ui.subtle("Poziom %d · %s" % [int(c.get("level", 1)), c.get("archetype", "")], 13))
+
+	_stat_row("Zdrowie", int(c.get("hp", 0)), int(c.get("hp_max", 100)), Ui.OXIDE)
+	if int(c.get("mana_max", 0)) > 0:
+		_stat_row("Mana", int(c.get("mana", 0)), int(c.get("mana_max", 0)), Ui.AZURE)
+	_stat_row("PD", int(c.get("xp", 0)), 100 * int(c.get("level", 1)), Ui.GOLD_DIM)
+
+	var pts := int(c.get("attr_points", 0))
+	var attrs: Dictionary = c.get("attrs", {})
+	if pts > 0:
+		_chronicle.add_child(Ui.subtle("PUNKTY ATRYBUTÓW: %d — rozdaj je!" % pts, 12))
+	for k in Game.ATTR_KEYS:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		_chronicle.add_child(row)
+		var lbl := Ui.subtle("%s: %d" % [Game.ATTR_LABELS[k], int(attrs.get(k, 5))], 13)
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(lbl)
+		if pts > 0:
+			var plus := Ui.button("+")
+			plus.custom_minimum_size = Vector2(34, 30)
+			plus.add_theme_font_size_override("font_size", 15)
+			plus.pressed.connect(Game.spend_attr.bind(k))
+			row.add_child(plus)
+	_chronicle.add_child(Ui.hsep())
+
+func _stat_row(label: String, val: int, maxv: int, color: Color) -> void:
+	var cap := Ui.subtle("%s %d/%d" % [label, val, maxv], 12)
+	_chronicle.add_child(cap)
+	var bar := Ui.stat_bar(color)
+	bar.max_value = maxv
+	bar.value = val
+	_chronicle.add_child(bar)
+
+# ——— Biblioteka postaci niezależnych ————————————————————————
+
+func _render_npcs() -> void:
+	_chronicle.add_child(Ui.subtle("POSTACIE", 12))
+	if Game.npcs.is_empty():
+		_chronicle.add_child(Ui.subtle("— jeszcze nikogo nie poznałeś —", 13))
+	else:
+		for n in Game.npcs:
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 8)
+			_chronicle.add_child(row)
+			var med := Ui.medallion(str(n.get("imie", "?")), 26)
+			med.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			row.add_child(med)
+			var v := VBoxContainer.new()
+			v.add_theme_constant_override("separation", 1)
+			v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(v)
+			var title_txt := str(n.get("imie", "?"))
+			if str(n.get("rola", "")) != "":
+				title_txt += " · " + str(n.get("rola", ""))
+			v.add_child(Ui.body(title_txt))
+			if str(n.get("relacja", "")) != "":
+				v.add_child(Ui.subtle(str(n.get("relacja", "")), 12))
+	_chronicle.add_child(Ui.hsep())
 
 func _section(title: String, items: Array, name_fn: Callable, note_fn: Callable) -> void:
 	_chronicle.add_child(Ui.subtle(title, 12))

@@ -17,6 +17,7 @@ const GOLD      := Color("cfa24a")
 const GOLD_DIM  := Color("6e561f")
 const OXIDE     := Color("b04a34")
 const GREEN     := Color("7f9c5a")
+const AZURE     := Color("5b7fa6")
 
 # Globalna skala czcionki (ustawiana z GameState wg ustawień gracza).
 static var scale: float = 1.0
@@ -229,3 +230,70 @@ static func spacer(h := 8) -> Control:
 	var c := Control.new()
 	c.custom_minimum_size = Vector2(0, h)
 	return c
+
+# ——— Portrety ————————————————————————————————————————————
+
+# Proceduralny medalion-portret: kolor i inicjały wyprowadzone z imienia,
+# więc ta sama postać zawsze dostaje ten sam „awatar”.
+static func medallion(display_name: String, size := 44) -> Control:
+	_load_fonts()
+	var h := absi(hash(display_name.to_lower()))
+	var hue := float(h % 360) / 360.0
+	var p := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color.from_hsv(hue, 0.42, 0.38)
+	sb.set_corner_radius_all(size)
+	sb.set_border_width_all(2)
+	sb.border_color = Color.from_hsv(hue, 0.5, 0.72)
+	sb.content_margin_left = 0
+	sb.content_margin_right = 0
+	sb.content_margin_top = 0
+	sb.content_margin_bottom = 0
+	p.add_theme_stylebox_override("panel", sb)
+	p.custom_minimum_size = Vector2(size, size)
+	var l := Label.new()
+	var words := display_name.strip_edges().split(" ", false)
+	var initials := ""
+	for i in range(mini(2, words.size())):
+		initials += words[i].left(1).to_upper()
+	l.text = initials if initials != "" else "?"
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	if _f_quill:
+		l.add_theme_font_override("font", _f_quill)
+	l.add_theme_font_size_override("font_size", int(size * 0.44))
+	l.add_theme_color_override("font_color", Color("f2ead6"))
+	p.add_child(l)
+	return p
+
+# Avatar gracza: własny obraz z dysku, a gdy go brak — medalion z inicjałami.
+static func avatar_or_medallion(character: Dictionary, size := 56) -> Control:
+	var path := str(character.get("avatar", ""))
+	if path != "" and FileAccess.file_exists(path):
+		var img := Image.load_from_file(path)
+		if img:
+			var tr := TextureRect.new()
+			tr.texture = ImageTexture.create_from_image(img)
+			tr.custom_minimum_size = Vector2(size, size)
+			tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+			tr.clip_contents = true
+			return tr
+	return medallion(str(character.get("name", "?")), size)
+
+# Pasek statystyki (zdrowie, mana, doświadczenie).
+static func stat_bar(fill: Color) -> ProgressBar:
+	var pb := ProgressBar.new()
+	pb.show_percentage = false
+	pb.custom_minimum_size = Vector2(0, 12)
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = BG_SOFT
+	bg.set_corner_radius_all(6)
+	bg.set_border_width_all(1)
+	bg.border_color = LINE
+	var fg := StyleBoxFlat.new()
+	fg.bg_color = fill
+	fg.set_corner_radius_all(6)
+	pb.add_theme_stylebox_override("background", bg)
+	pb.add_theme_stylebox_override("fill", fg)
+	return pb

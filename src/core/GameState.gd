@@ -13,6 +13,10 @@ var history: Array = []        # [{role:"narrator"/"player", text, roll?}]
 var locations: Array = []      # [{name, note}]
 var discoveries: Array = []    # [{title, type, time}]
 var quests: Array = []         # [{title, note, status}]
+var npcs: Array = []           # [{imie, plec, rola, relacja, tura}] — biblioteka postaci
+
+const ATTR_KEYS := ["sila", "zrecznosc", "intelekt", "charyzma"]
+const ATTR_LABELS := {"sila": "Siła", "zrecznosc": "Zręczność", "intelekt": "Intelekt", "charyzma": "Charyzma"}
 var turn: int = 0
 var seed_value: int = 0
 var rng := RandomNumberGenerator.new()
@@ -96,6 +100,38 @@ func _resize_and_center(win: Window) -> void:
 func profile() -> Dictionary:
 	return Genres.profile(world.get("genre_key", "fantasy"))
 
+# ——— Statystyki postaci (HP, mana, PD, atrybuty) ————————————————
+
+# Mana istnieje tylko w światach z realną nadnaturalnością.
+func world_has_mana() -> bool:
+	var s := str(world.get("supernatural", "")).strip_edges().to_lower()
+	return s != "" and not s.begins_with("brak")
+
+# Uzupełnia brakujące pola postaci (nowe postacie i stare zapisy).
+func ensure_character_stats() -> void:
+	if not character.has("gender"):
+		character["gender"] = "Mężczyzna"
+	if not character.has("avatar"):
+		character["avatar"] = ""
+	if typeof(character.get("attrs")) != TYPE_DICTIONARY:
+		character["attrs"] = {}
+	for k in ATTR_KEYS:
+		if not character["attrs"].has(k):
+			character["attrs"][k] = 5
+	for pair in [["level", 1], ["xp", 0], ["attr_points", 0], ["hp_max", 100],
+			["hp", 100], ["mana_max", 0], ["mana", 0], ["dead", false]]:
+		if not character.has(pair[0]):
+			character[pair[0]] = pair[1]
+
+# Wydanie punktu atrybutu (przycisk „+” w Kronice).
+func spend_attr(key: String) -> void:
+	ensure_character_stats()
+	if int(character.get("attr_points", 0)) <= 0 or not ATTR_KEYS.has(key):
+		return
+	character["attrs"][key] = int(character["attrs"][key]) + 1
+	character["attr_points"] = int(character["attr_points"]) - 1
+	emit_signal("chronicle_changed")
+
 # ——— Rozpoczęcie i przebieg przygody ————————————————————————
 
 func new_world() -> void:
@@ -111,8 +147,18 @@ func begin_adventure() -> void:
 	locations.clear()
 	discoveries.clear()
 	quests.clear()
+	npcs.clear()
 	turn = 0
 	started = true
+
+	# Statystyki: poziom/atrybuty/PD niesie postać (magazyn postaci),
+	# ale zdrowie i mana zaczynają pełne w każdej nowej opowieści.
+	ensure_character_stats()
+	character["hp"] = int(character["hp_max"])
+	character["mana_max"] = 100 if world_has_mana() else 0
+	character["mana"] = int(character["mana_max"])
+	character["dead"] = false
+	Saves.save_character(character)
 
 	var prof := profile()
 	# Startowy punkt zaczepienia w Kronice.
@@ -132,16 +178,21 @@ func take_action(action: String) -> void:
 	var prof := profile()
 	var text := ""
 	var roll := {}
+	var state := {}
 
 	if Narrator.ai_enabled():
 		# Akcja gracza jest już ostatnim wpisem historii.
 		text = await Narrator.ai_generate(world, character, history)
+		if text != "":
+			var pr := Narrator.parse_state(text)
+			text = pr["text"]
+			state = pr["state"]
 
 	if text == "":
 		# Tryb offline (także fallback, gdy AI zawiedzie).
 		# Rzut kością tylko wtedy, gdy działanie faktycznie stawia coś na szali.
 		if _should_roll(action):
-			roll = Narrator.roll_action(rng, _archetype_modifier())
+			roll = Narrator.roll_action(rng, _attr_modifier(action))
 		text = Narrator.respond(world, character, prof, action, roll, rng)
 
 	var entry := {"role": "narrator", "text": text}
@@ -149,7 +200,109 @@ func take_action(action: String) -> void:
 		entry["roll"] = roll
 	history.append(entry)
 	_update_memory(action, text)
+	_apply_turn_effects(action, roll, state)
 	emit_signal("chronicle_changed")
+
+# ——— Efekty tury: zdrowie, mana, doświadczenie, biblioteka postaci ————
+
+func _apply_turn_effects(action: String, roll: Dictionary, state: Dictionary) -> void:
+	ensure_character_stats()
+	var hp_delta := 0
+	var mana_delta := 0
+	var xp_gain := 0
+
+	if not state.is_empty():
+		# Tryb AI: wartości z ukrytego bloku stanu (z bezpiecznymi granicami).
+		hp_delta = clampi(int(state.get("hp", 0)), -40, 25)
+		mana_delta = clampi(int(state.get("mana", 0)), -60, 25)
+		xp_gain = clampi(int(state.get("pd", 8)), 0, 40)
+		_merge_npcs(state.get("postacie", []))
+	else:
+		# Tryb offline: proste reguły.
+		xp_gain = 8
+		if not roll.is_empty():
+			match str(roll.get("tier", "")):
+				"krytyczny sukces":
+					xp_gain = 30
+				"sukces":
+					xp_gain = 20
+				"częściowy sukces":
+					xp_gain = 12
+				"niepowodzenie":
+					xp_gain = 6
+					hp_delta = -6
+				"krytyczna porażka":
+					xp_gain = 4
+					hp_delta = -12
+		if character["mana_max"] > 0 and _uses_magic(action):
+			mana_delta -= 12
+
+	# Powolna regeneracja co turę.
+	hp_delta += 2
+	mana_delta += 5
+
+	character["hp"] = clampi(int(character["hp"]) + hp_delta, 0, int(character["hp_max"]))
+	if int(character["mana_max"]) > 0:
+		character["mana"] = clampi(int(character["mana"]) + mana_delta, 0, int(character["mana_max"]))
+	character["xp"] = int(character["xp"]) + xp_gain
+
+	_check_level_up()
+	_check_death()
+
+func _uses_magic(action: String) -> bool:
+	var s := action.to_lower()
+	for w in ["czar", "zaklę", "zakle", "magi", "moc", "rytuał", "rytual", "urok", "przywoł", "przywol"]:
+		if s.contains(w):
+			return true
+	return false
+
+# Próg kolejnego poziomu: 100 × obecny poziom PD.
+func _check_level_up() -> void:
+	var leveled := false
+	while int(character["xp"]) >= 100 * int(character["level"]):
+		character["xp"] = int(character["xp"]) - 100 * int(character["level"])
+		character["level"] = int(character["level"]) + 1
+		character["attr_points"] = int(character["attr_points"]) + 2
+		leveled = true
+	if leveled:
+		history.append({"role": "narrator", "text":
+			"✦ %s osiąga poziom %d! Masz %d pkt atrybutów do rozdania — panel bohatera w Kronice." % [
+				character.get("name", "Bohater"), int(character["level"]), int(character["attr_points"])]})
+		Saves.save_character(character)
+
+func _check_death() -> void:
+	if int(character["hp"]) > 0 or bool(character.get("dead", false)):
+		return
+	character["dead"] = true
+	history.append({"role": "narrator", "text":
+		"Świat ciemnieje. %s osuwa się na ziemię — ta kronika dobiega końca. Możesz wrócić do menu i rozpocząć nową opowieść." % character.get("name", "Bohater")})
+
+# Scala postacie z bloku stanu z biblioteką (po imieniu, bez rozróżniania wielkości liter).
+func _merge_npcs(arr) -> void:
+	if typeof(arr) != TYPE_ARRAY:
+		return
+	for n in arr:
+		if typeof(n) != TYPE_DICTIONARY:
+			continue
+		var imie := str(n.get("imie", "")).strip_edges()
+		if imie == "" or imie.to_lower() == str(character.get("name", "")).to_lower():
+			continue
+		var found := false
+		for x in npcs:
+			if str(x["imie"]).to_lower() == imie.to_lower():
+				x["rola"] = str(n.get("rola", x.get("rola", "")))
+				x["relacja"] = str(n.get("relacja", x.get("relacja", "")))
+				x["plec"] = str(n.get("plec", x.get("plec", "")))
+				found = true
+				break
+		if not found and npcs.size() < 40:
+			npcs.append({
+				"imie": imie,
+				"plec": str(n.get("plec", "")),
+				"rola": str(n.get("rola", "")),
+				"relacja": str(n.get("relacja", "")),
+				"tura": turn,
+			})
 
 # Decyduje, czy dane działanie wymaga rzutu kością — zależnie od trybu w ustawieniach.
 func _should_roll(action: String) -> bool:
@@ -169,14 +322,23 @@ func _should_roll(action: String) -> bool:
 					return true
 			return false
 
-# Delikatny modyfikator do rzutu zależny od archetypu — nic ekstremalnego.
-func _archetype_modifier() -> int:
-	var a := str(character.get("archetype", "")).to_lower()
-	if a.contains("najemn") or a.contains("rewolwer") or a.contains("żołn") or a.contains("łowca"):
-		return 2
-	if a.contains("uczon") or a.contains("naukow") or a.contains("inżynier") or a.contains("netrun"):
-		return 1
-	return 0
+# Modyfikator rzutu z atrybutu dobranego do rodzaju działania.
+# Atrybuty startują na 5 (mod 0); każdy pełny +2 ponad 5 daje +1 do rzutu.
+func _attr_modifier(action: String) -> int:
+	ensure_character_stats()
+	var attr := ""
+	match Narrator.classify(action):
+		"fight":
+			attr = "sila"
+		"move":
+			attr = "zrecznosc"
+		"look":
+			attr = "intelekt"
+		"talk":
+			attr = "charyzma"
+		_:
+			return 0
+	return int(floor((int(character["attrs"].get(attr, 5)) - 5) / 2.0))
 
 # ——— Kronika: dopisywanie miejsc, odkryć i wątków ——————————————
 
@@ -239,6 +401,7 @@ func to_dict() -> Dictionary:
 		"locations": locations,
 		"discoveries": discoveries,
 		"quests": quests,
+		"npcs": npcs,
 		"turn": turn,
 		"seed": seed_value,
 	}
@@ -250,10 +413,12 @@ func from_dict(d: Dictionary) -> void:
 	locations = d.get("locations", [])
 	discoveries = d.get("discoveries", [])
 	quests = d.get("quests", [])
+	npcs = d.get("npcs", [])
 	turn = int(d.get("turn", 0))
 	seed_value = int(d.get("seed", 0))
 	rng.seed = seed_value
 	started = true
+	ensure_character_stats()
 	emit_signal("chronicle_changed")
 
 # ——— Ustawienia ———————————————————————————————————————————

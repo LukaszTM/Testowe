@@ -295,23 +295,101 @@ func _render_npcs() -> void:
 		_chronicle.add_child(Ui.subtle("— jeszcze nikogo nie poznałeś —", 13))
 	else:
 		for n in Game.npcs:
-			var row := HBoxContainer.new()
-			row.add_theme_constant_override("separation", 8)
-			_chronicle.add_child(row)
-			var med := Ui.medallion(str(n.get("imie", "?")), 26)
-			med.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			row.add_child(med)
-			var v := VBoxContainer.new()
-			v.add_theme_constant_override("separation", 1)
-			v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			row.add_child(v)
-			var title_txt := str(n.get("imie", "?"))
-			if str(n.get("rola", "")) != "":
-				title_txt += " · " + str(n.get("rola", ""))
-			v.add_child(Ui.body(title_txt))
-			if str(n.get("relacja", "")) != "":
-				v.add_child(Ui.subtle(str(n.get("relacja", "")), 12))
+			_chronicle.add_child(_npc_tile(n))
 	_chronicle.add_child(Ui.hsep())
+
+# Klikalny kafelek postaci — otwiera jej kartę.
+func _npc_tile(n: Dictionary) -> Control:
+	var tile := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Ui.BG_SOFT
+	sb.set_corner_radius_all(8)
+	sb.set_border_width_all(1)
+	sb.border_color = Ui.LINE
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	tile.add_theme_stylebox_override("panel", sb)
+	tile.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	tile.tooltip_text = "Kliknij, aby otworzyć kartę postaci"
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	tile.add_child(row)
+	var med := Ui.medallion(str(n.get("imie", "?")), 28)
+	med.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(med)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 1)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(v)
+	var title_txt := str(n.get("imie", "?"))
+	if str(n.get("rola", "")) != "":
+		title_txt += " · " + str(n.get("rola", ""))
+	v.add_child(Ui.body(title_txt))
+	if str(n.get("relacja", "")) != "":
+		var rel := Ui.subtle(str(n.get("relacja", "")), 12)
+		rel.max_lines_visible = 2
+		v.add_child(rel)
+
+	tile.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			Audio.click()
+			_show_npc_card(n))
+	return tile
+
+# Karta postaci — nakładka na cały ekran.
+func _show_npc_card(n: Dictionary) -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.6)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var card := Ui.card(22)
+	card.custom_minimum_size = Vector2(440, 0)
+	center.add_child(card)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 10)
+	card.add_child(col)
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 14)
+	col.add_child(head)
+	head.add_child(Ui.medallion(str(n.get("imie", "?")), 72))
+	var hv := VBoxContainer.new()
+	hv.add_theme_constant_override("separation", 3)
+	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hv.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(hv)
+	hv.add_child(Ui.heading(str(n.get("imie", "?")), 24))
+	if str(n.get("rola", "")) != "":
+		hv.add_child(Ui.subtle(str(n.get("rola", "")), 14))
+
+	col.add_child(Ui.hsep())
+	if str(n.get("plec", "")) != "":
+		col.add_child(Ui.subtle("PŁEĆ", 12))
+		col.add_child(Ui.body(str(n.get("plec", "")).capitalize()))
+	col.add_child(Ui.subtle("POZNANO", 12))
+	col.add_child(Ui.body("Tura %d" % int(n.get("tura", 0))))
+	col.add_child(Ui.subtle("RELACJA I UCZUCIA", 12))
+	var rel := Ui.body(str(n.get("relacja", "— jeszcze nieznane —")))
+	col.add_child(rel)
+
+	col.add_child(Ui.spacer(6))
+	var close := Ui.button("Zamknij")
+	close.pressed.connect(func(): overlay.queue_free())
+	col.add_child(close)
+
+	# Kliknięcie w tło również zamyka kartę.
+	overlay.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and ev.pressed:
+			overlay.queue_free())
 
 func _section(title: String, items: Array, name_fn: Callable, note_fn: Callable) -> void:
 	_chronicle.add_child(Ui.subtle(title, 12))

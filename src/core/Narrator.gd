@@ -210,31 +210,40 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 			qs.append(str(q.get("title", "")))
 		lines.append("OTWARTE WĄTKI: %s." % ", ".join(qs))
 	lines.append("")
-	lines.append("BLOK STANU — na samym końcu KAŻDEJ odpowiedzi dodaj dokładnie jedną linię (gracz jej nie zobaczy; nie wspominaj o niej w narracji):")
+	lines.append("FORMAT ODPOWIEDZI (bezwzględny): PIERWSZA linia każdej odpowiedzi to blok stanu — jedna linia czystego JSON, bez bloku kodu:")
 	lines.append('###STAN {"postacie":[{"imie":"Marta","plec":"kobieta","rola":"zielarka","relacja":"nieufna, ale zaciekawiona graczem"}],"hp":0,"mana":0,"pd":10}')
-	lines.append("- postacie: wszystkie postacie niezależne obecne w tej scenie; w polu relacja krótko opisz aktualne uczucia i powiązania z graczem.")
+	lines.append("Po niej pusta linia, a potem właściwa narracja. Gracz nie widzi bloku — nie wspominaj o nim w tekście.")
+	lines.append("- postacie: WSZYSTKIE postacie niezależne obecne w tej scenie (także wspomniane wcześniej); w polu relacja krótko: aktualne uczucia i powiązania z graczem.")
 	lines.append("- hp: zmiana Zdrowia gracza w tej turze (ujemna przy obrażeniach; zwykle 0).")
 	lines.append("- mana: zmiana Many gracza (ujemna przy użyciu mocy%s)." % ("" if has_mana else "; w tym świecie zawsze 0"))
 	lines.append("- pd: punkty doświadczenia za tę turę — 5–15 za zwykłe działania, do 30 za brawurowe, sprytne lub przełomowe.")
-	lines.append("- To czysty JSON w jednej linii, bez bloku kodu i bez dodatkowego tekstu po nim.")
 	return "\n".join(lines)
 
-# Wycina blok ###STAN z odpowiedzi modelu. Zwraca {text, state}.
+# Wycina blok ###STAN z odpowiedzi modelu (z początku, końca albo środka).
+# Zwraca {text, state}.
 func parse_state(text: String) -> Dictionary:
-	var idx := text.rfind("###STAN")
+	var idx := text.find("###STAN")
 	if idx == -1:
 		return {"text": text.strip_edges(), "state": {}}
-	var clean := text.substr(0, idx).strip_edges()
-	var raw := text.substr(idx + 7).strip_edges()
-	# Model czasem opakowuje JSON w znaczniki kodu — zdejmij je.
+	var nl := text.find("\n", idx)
+	var line := text.substr(idx) if nl == -1 else text.substr(idx, nl - idx)
+	var clean := text.substr(0, idx) + ("" if nl == -1 else text.substr(nl))
+	var state := _parse_state_json(line.substr(7))
+	if state.is_empty():
+		# JSON mógł zostać rozbity na kilka linii — spróbuj całej reszty.
+		state = _parse_state_json(text.substr(idx + 7))
+		if not state.is_empty():
+			clean = text.substr(0, idx)
+	return {"text": clean.strip_edges(), "state": state}
+
+func _parse_state_json(raw: String) -> Dictionary:
+	raw = raw.strip_edges()
 	raw = raw.trim_prefix("```json").trim_prefix("```").trim_suffix("```").strip_edges()
 	var brace := raw.find("{")
-	if brace >= 0:
-		raw = raw.substr(brace)
-	var parsed = JSON.parse_string(raw)
-	if typeof(parsed) != TYPE_DICTIONARY:
-		parsed = {}
-	return {"text": clean, "state": parsed}
+	if brace < 0:
+		return {}
+	var parsed = JSON.parse_string(raw.substr(brace))
+	return parsed if typeof(parsed) == TYPE_DICTIONARY else {}
 
 # Historia rozmowy w formacie Claude API (role user/assistant).
 # Pierwszy wpis musi mieć rolę "user", więc zaczynamy syntetycznym otwarciem.
@@ -258,7 +267,7 @@ func _claude_request(system: String, messages: Array) -> String:
 		return ""
 	var payload := {
 		"model": str(Game.settings.get("claude_model", "claude-opus-5")),
-		"max_tokens": 1024,
+		"max_tokens": 1536,
 		"system": system,
 		"messages": messages,
 	}

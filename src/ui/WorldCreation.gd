@@ -2,6 +2,20 @@ class_name WorldCreation
 extends Control
 
 var _f := {}          # referencje do pól formularza
+var _mood: OptionButton
+
+const MOOD_KEYS := ["lagodna", "wywazona", "mroczna"]
+const MOOD_LABELS := [
+	"Przygodowa — łagodna i przyjazna",
+	"Wyważona — spokój i napięcie na zmianę",
+	"Mroczna — sensacyjna, wysokie stawki",
+]
+
+# Części losowych nazw światów.
+const NAME_A := ["Popioły", "Cienie", "Wrota", "Echa", "Kroniki", "Serce",
+	"Zmierzch", "Przystań", "Szepty", "Ostatnie dni"]
+const NAME_B := ["Północy", "Starego Traktu", "Zatoki", "Żelaznej Doliny",
+	"Siódmego Miasta", "Pogranicza", "Mgły", "Bursztynu", "Kamiennych Pól", "Utraconych"]
 
 func _ready() -> void:
 	var margin := MarginContainer.new()
@@ -39,6 +53,16 @@ func _ready() -> void:
 	_f["genre"] = genre["edit"]
 	genre["edit"].item_selected.connect(_apply_template)
 	col.add_child(genre["row"])
+
+	var mood := Ui.dropdown("Charakter opowieści", MOOD_LABELS)
+	_mood = mood["edit"]
+	_mood.select(1)
+	col.add_child(mood["row"])
+	col.add_child(Ui.subtle("„Łagodna” prowadzi historię przyjaźnie i przygodowo, bez nagłej sensacji; „mroczna” od początku podnosi stawkę.", 12))
+
+	var rand_btn := Ui.button("Losuj świat")
+	rand_btn.pressed.connect(_randomize_world)
+	col.add_child(rand_btn)
 
 	_f["name"] = _add(col, Ui.field("Nazwa świata", "np. Popioły Wschodniej Marchii"))
 	_f["era"] = _add(col, Ui.field("Epoka", "np. Późne średniowiecze"))
@@ -85,8 +109,15 @@ func _apply_template(index: int) -> void:
 	_f["tone"].text = t.get("tone", "")
 	_f["start_location"].text = t.get("start_location", "")
 
+func _randomize_world() -> void:
+	var i := randi() % Genres.ORDER.size()
+	_f["genre"].select(i)
+	_apply_template(i)
+	_f["name"].text = "%s %s" % [NAME_A[randi() % NAME_A.size()], NAME_B[randi() % NAME_B.size()]]
+
 func _restore() -> void:
 	var w := Game.world
+	_mood.select(maxi(0, MOOD_KEYS.find(str(w.get("mood", "wywazona")))))
 	_f["name"].text = w.get("name", "")
 	_f["era"].text = w.get("era", "")
 	_f["year"].text = w.get("year", "")
@@ -111,6 +142,7 @@ func _go_next() -> void:
 		"supernatural": _f["supernatural"].text.strip_edges(),
 		"tone": _f["tone"].text.strip_edges(),
 		"start_location": _f["start_location"].text.strip_edges(),
+		"mood": MOOD_KEYS[_mood.selected],
 		"mystery": "",
 	}
 	Game.router.goto("character")

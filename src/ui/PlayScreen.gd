@@ -2,7 +2,7 @@ class_name PlayScreen
 extends Control
 
 var _log: RichTextLabel
-var _input: LineEdit
+var _input: TextEdit
 var _send: Button
 var _suggest_box: VBoxContainer
 var _chronicle: VBoxContainer
@@ -132,35 +132,69 @@ func _build_action_bar() -> Control:
 	row.add_theme_constant_override("separation", 10)
 	box.add_child(row)
 
-	_input = LineEdit.new()
+	# Pole akcji: zawija długi tekst i rośnie do trzech linii.
+	_input = TextEdit.new()
 	_input.placeholder_text = "Opisz, co robi Twoja postać…"
 	_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_input.text_submitted.connect(func(_t): _submit(_input.text))
+	_input.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_input.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_input.scroll_fit_content_height = true
+	_input.custom_minimum_size = Vector2(0, _input_height(1))
+	_input.text_changed.connect(_resize_input)
+	_input.gui_input.connect(_input_gui)
 	row.add_child(_input)
 
 	_send = Ui.button("Wykonaj", true)
 	_send.custom_minimum_size = Vector2(130, 46)
+	_send.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_send.pressed.connect(func(): _submit(_input.text))
 	row.add_child(_send)
 	return box
 
+# Wysokość pola dla danej liczby linii (z marginesami stylu).
+func _input_height(lines: int) -> int:
+	return int(_input.get_line_height() * lines + Ui.fs(22))
+
+# Rośnie razem z tekstem, maksymalnie do trzech linii.
+func _resize_input() -> void:
+	var lines := clampi(_input.get_line_count(), 1, 3)
+	# Zawijanie tworzy dodatkowe linie wizualne — uwzględnij je.
+	var visual := 0
+	for i in range(_input.get_line_count()):
+		visual += _input.get_line_wrap_count(i) + 1
+	lines = clampi(maxi(lines, visual), 1, 3)
+	_input.custom_minimum_size = Vector2(0, _input_height(lines))
+
+# Enter wysyła akcję; Shift+Enter przechodzi do nowej linii.
+func _input_gui(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo:
+		if ev.keycode == KEY_ENTER or ev.keycode == KEY_KP_ENTER:
+			if not ev.shift_pressed:
+				get_viewport().set_input_as_handled()
+				_submit(_input.text)
+
 func _rebuild_suggestions() -> void:
 	for c in _suggest_box.get_children():
 		c.queue_free()
-	var prof := Game.profile()
-	var pool: Array = (prof.get("suggestions", []) as Array).duplicate()
-	pool.shuffle()
-	var lbl := Ui.subtle("PODPOWIEDZI", 12)
-	_suggest_box.add_child(lbl)
+	# W trybie Mistrza Gry podpowiedzi pochodzą z bieżącej sceny; offline —
+	# z puli gatunku.
+	var pool: Array = Game.suggestions.duplicate()
+	if pool.is_empty():
+		pool = (Game.profile().get("suggestions", []) as Array).duplicate()
+		pool.shuffle()
+	if pool.is_empty():
+		return
+	_suggest_box.add_child(Ui.subtle("PODPOWIEDZI", 12))
 	var grid := HBoxContainer.new()
 	grid.add_theme_constant_override("separation", 8)
 	_suggest_box.add_child(grid)
-	for i in range(min(3, pool.size())):
-		var text: String = pool[i]
+	for i in range(mini(3, pool.size())):
+		var text: String = str(pool[i])
 		var chip := Ui.button(text)
 		chip.custom_minimum_size = Vector2(0, 40)
 		chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		chip.add_theme_font_size_override("font_size", 15)
+		chip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		chip.pressed.connect(_submit.bind(text))
 		grid.add_child(chip)
 
@@ -171,6 +205,7 @@ func _submit(text: String) -> void:
 	if text == "":
 		return
 	_input.text = ""
+	_resize_input()
 	_set_busy(true)
 	await Game.take_action(text)
 	_set_busy(false)

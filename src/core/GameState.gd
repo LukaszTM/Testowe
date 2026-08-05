@@ -14,6 +14,7 @@ var locations: Array = []      # [{name, note}]
 var discoveries: Array = []    # [{title, type, time}]
 var quests: Array = []         # [{title, note, status}]
 var npcs: Array = []           # [{imie, plec, rola, relacja, tura}] — biblioteka postaci
+var suggestions: Array = []    # podpowiedzi na bieżącą turę (od Mistrza Gry)
 
 const ATTR_KEYS := ["sila", "zrecznosc", "intelekt", "charyzma"]
 const ATTR_LABELS := {"sila": "Siła", "zrecznosc": "Zręczność", "intelekt": "Intelekt", "charyzma": "Charyzma"}
@@ -148,6 +149,7 @@ func begin_adventure() -> void:
 	discoveries.clear()
 	quests.clear()
 	npcs.clear()
+	suggestions.clear()
 	turn = 0
 	started = true
 
@@ -217,6 +219,7 @@ func _apply_turn_effects(action: String, roll: Dictionary, state: Dictionary) ->
 		mana_delta = clampi(int(state.get("mana", 0)), -60, 25)
 		xp_gain = clampi(int(state.get("pd", 8)), 0, 40)
 		_merge_npcs(state.get("postacie", []))
+		_set_suggestions(state.get("podpowiedzi", []))
 	else:
 		# Tryb offline: proste reguły.
 		xp_gain = 8
@@ -276,6 +279,18 @@ func _check_death() -> void:
 	character["dead"] = true
 	history.append({"role": "narrator", "text":
 		"Świat ciemnieje. %s osuwa się na ziemię — ta kronika dobiega końca. Możesz wrócić do menu i rozpocząć nową opowieść." % character.get("name", "Bohater")})
+
+# Podpowiedzi na następną turę, przygotowane przez Mistrza Gry do bieżącej sceny.
+func _set_suggestions(arr) -> void:
+	if typeof(arr) != TYPE_ARRAY:
+		return
+	var out: Array = []
+	for s in arr:
+		var t := str(s).strip_edges()
+		if t != "" and out.size() < 3:
+			out.append(t)
+	if not out.is_empty():
+		suggestions = out
 
 # Scala postacie z bloku stanu z biblioteką (po imieniu, bez rozróżniania wielkości liter).
 func _merge_npcs(arr) -> void:
@@ -402,6 +417,7 @@ func to_dict() -> Dictionary:
 		"discoveries": discoveries,
 		"quests": quests,
 		"npcs": npcs,
+		"suggestions": suggestions,
 		"turn": turn,
 		"seed": seed_value,
 	}
@@ -414,6 +430,7 @@ func from_dict(d: Dictionary) -> void:
 	discoveries = d.get("discoveries", [])
 	quests = d.get("quests", [])
 	npcs = d.get("npcs", [])
+	suggestions = d.get("suggestions", [])
 	turn = int(d.get("turn", 0))
 	seed_value = int(d.get("seed", 0))
 	rng.seed = seed_value

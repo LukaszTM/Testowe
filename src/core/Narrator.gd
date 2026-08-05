@@ -174,6 +174,13 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 	lines.append("- Postać gracza to %s — konsekwentnie używaj %s form gramatycznych, zwracając się do niej." % [
 		"kobieta" if is_female else "mężczyzna",
 		"żeńskich" if is_female else "męskich"])
+	match str(world.get("mood", "wywazona")):
+		"lagodna":
+			lines.append("- TON OPOWIEŚCI: łagodny i przygodowy. Świat jest w gruncie rzeczy życzliwy: stawiaj na ciekawość, eksplorację, spotkania, ciepły humor i drobne codzienne zagadki. Zagrożenia są rzadkie i umowne, przemoc ogranicz do minimum. NIE eskaluj napięcia ani nie wprowadzaj nagłej sensacji, dopóki gracz sam wyraźnie jej nie szuka.")
+		"mroczna":
+			lines.append("- TON OPOWIEŚCI: mroczny i sensacyjny. Stawki są wysokie, zagrożenia realne, a napięcie gęste — od pierwszych scen.")
+		_:
+			lines.append("- TON OPOWIEŚCI: wyważony. Przeplataj spokojne, ludzkie sceny z momentami napięcia; eskaluj powoli i przede wszystkim w odpowiedzi na decyzje gracza, nie z własnej inicjatywy co turę.")
 	if has_mana:
 		lines.append("- W tym świecie istnieje nadnaturalna moc. Użycie jej przez gracza kosztuje Manę — uwzględniaj to w bloku stanu.")
 	lines.append("")
@@ -211,12 +218,13 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 		lines.append("OTWARTE WĄTKI: %s." % ", ".join(qs))
 	lines.append("")
 	lines.append("FORMAT ODPOWIEDZI (bezwzględny): PIERWSZA linia każdej odpowiedzi to blok stanu — jedna linia czystego JSON, bez bloku kodu:")
-	lines.append('###STAN {"postacie":[{"imie":"Marta","plec":"kobieta","rola":"zielarka","relacja":"nieufna, ale zaciekawiona graczem"}],"hp":0,"mana":0,"pd":10}')
+	lines.append('###STAN {"postacie":[{"imie":"Marta","plec":"kobieta","rola":"zielarka","relacja":"nieufna, ale zaciekawiona graczem"}],"hp":0,"mana":0,"pd":10,"podpowiedzi":["Zapytaj Martę o list","Rozejrzyj się po składzie","Wróć do gospody na wieczerzę"]}')
 	lines.append("Po niej pusta linia, a potem właściwa narracja. Gracz nie widzi bloku — nie wspominaj o nim w tekście.")
 	lines.append("- postacie: WSZYSTKIE postacie niezależne obecne w tej scenie (także wspomniane wcześniej); w polu relacja krótko: aktualne uczucia i powiązania z graczem.")
 	lines.append("- hp: zmiana Zdrowia gracza w tej turze (ujemna przy obrażeniach; zwykle 0).")
 	lines.append("- mana: zmiana Many gracza (ujemna przy użyciu mocy%s)." % ("" if has_mana else "; w tym świecie zawsze 0"))
 	lines.append("- pd: punkty doświadczenia za tę turę — 5–15 za zwykłe działania, do 30 za brawurowe, sprytne lub przełomowe.")
+	lines.append("- podpowiedzi: dokładnie 3 krótkie (do 8 słów) propozycje następnego ruchu gracza, w trybie rozkazującym, ściśle wynikające z bieżącej sceny — sensowne, różnorodne opcje, nie oczywistości.")
 	return "\n".join(lines)
 
 # Wycina blok ###STAN z odpowiedzi modelu (z początku, końca albo środka).

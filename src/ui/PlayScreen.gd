@@ -107,7 +107,10 @@ func _build_topbar() -> Control:
 	var menu := Ui.button("Menu")
 	menu.custom_minimum_size = Vector2(90, 40)
 	menu.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	menu.pressed.connect(func(): Game.router.goto("menu"))
+	# Wyjście do menu zapisuje kronikę — nic nie przepada.
+	menu.pressed.connect(func():
+		Saves.save_current()
+		Game.router.goto("menu"))
 	bar.add_child(menu)
 	return bar
 

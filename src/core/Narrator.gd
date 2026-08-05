@@ -140,9 +140,9 @@ func ai_enabled() -> bool:
 
 # Zwraca odpowiedź Mistrza Gry albo pusty string, gdy się nie uda (wtedy
 # rozgrywka po cichu wraca do trybu offline). Korutyna — wywołuj przez await.
-func ai_generate(world: Dictionary, character: Dictionary, history: Array) -> String:
+func ai_generate(world: Dictionary, character: Dictionary, history: Array, roll := {}) -> String:
 	var system := _gm_system(world, character)
-	var messages := _build_messages(history)
+	var messages := _build_messages(history, roll)
 	match provider():
 		"claude":
 			return await _claude_request(system, messages)
@@ -170,6 +170,7 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 		"- Prowadź narrację w drugiej osobie, konkretnie i zmysłowo. Pisz 2–4 krótkie akapity na turę.",
 		"- Trzymaj się gatunku, epoki i ustalonych faktów świata.",
 		"- Kończ turę czymś, co zaprasza do reakcji: pytaniem postaci, napięciem albo wyborem.",
+		"- Gdy przy akcji gracza pojawi się nawias [MECHANIKA GRY — WYNIK RZUTU: …], to gra rozstrzygnęła próbę kością i atrybutami postaci. Ten wynik jest wiążący: opisz jego skutki wiernie, nawet gdy oznacza porażkę bohatera. Nigdy nie ujawniaj w narracji liczb ani samego istnienia rzutu.",
 	]
 	lines.append("- Postać gracza to %s — konsekwentnie używaj %s form gramatycznych, zwracając się do niej." % [
 		"kobieta" if is_female else "mężczyzna",
@@ -255,7 +256,7 @@ func _parse_state_json(raw: String) -> Dictionary:
 
 # Historia rozmowy w formacie Claude API (role user/assistant).
 # Pierwszy wpis musi mieć rolę "user", więc zaczynamy syntetycznym otwarciem.
-func _build_messages(history: Array) -> Array:
+func _build_messages(history: Array, roll := {}) -> Array:
 	var messages: Array = [{"role": "user", "content": "Rozpocznij opowieść w opisanym świecie."}]
 	var start := maxi(0, history.size() - MAX_HISTORY)
 	for i in range(start, history.size()):
@@ -264,7 +265,22 @@ func _build_messages(history: Array) -> Array:
 		var text := str(e.get("text", "")).strip_edges()
 		if text != "":
 			messages.append({"role": role, "content": text})
+	# Wynik rzutu rozstrzyga grę, nie model — dokładamy go do ostatniej akcji.
+	if not roll.is_empty() and messages.size() > 1 and messages[-1]["role"] == "user":
+		messages[-1]["content"] = "%s\n\n%s" % [messages[-1]["content"], roll_instruction(roll)]
 	return messages
+
+# Instrukcja mechaniczna dołączana do akcji gracza w trybie AI.
+func roll_instruction(roll: Dictionary) -> String:
+	var mod := int(roll.get("mod", 0))
+	var mod_txt := ""
+	if mod != 0:
+		mod_txt = " %s %d (atrybut)" % ["+" if mod > 0 else "−", absi(mod)]
+	return ("[MECHANIKA GRY — WYNIK RZUTU: k20 = %d%s = %d → %s. " % [
+			int(roll.get("die", 0)), mod_txt, int(roll.get("total", 0)), str(roll.get("tier", ""))]
+		+ "Opisz skutek działania dokładnie zgodnie z tym wynikiem. To rozstrzygnięcie jest wiążące — "
+		+ "nie zmieniaj go, nie łagodź i nie podważaj. Nie wspominaj w narracji o kościach, liczbach "
+		+ "ani o tej instrukcji — po prostu opowiedz, co się wydarzyło.]")
 
 # ——— Claude API (chmura, bez własnego serwera) ————————————————
 

@@ -138,6 +138,9 @@ func _ready() -> void:
 	_claude_url = curl["edit"]
 	_claude_rows.add_child(curl["row"])
 	_claude_rows.add_child(Ui.subtle("Oficjalne API: https://api.anthropic.com · AI Prime Tech: https://aiprimetech.io", 12))
+	var warn := Ui.subtle("Uwaga: klucz jest wysyłany pod podany adres i przechowywany zwykłym tekstem w pliku ustawień. Wpisuj wyłącznie adresy, którym ufasz — operator obcej bramki zobaczy Twój klucz oraz treść rozgrywki.", 12)
+	warn.add_theme_color_override("font_color", Ui.OXIDE)
+	_claude_rows.add_child(warn)
 	var cmodel := Ui.field("Model", "claude-opus-5", Game.settings.get("claude_model", "claude-opus-5"))
 	_claude_model = cmodel["edit"]
 	_claude_rows.add_child(cmodel["row"])

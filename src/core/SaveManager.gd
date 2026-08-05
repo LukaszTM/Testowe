@@ -8,10 +8,19 @@ const DIR := "user://kroniki"
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(DIR)
 
+# Polskie znaki mają odpowiedniki łacińskie — bez tego „Świat” stałby się
+# „wiat”, a „Żaneta” i „Aneta” trafiłyby do jednego pliku.
+const TRANSLIT := {
+	"ą": "a", "ć": "c", "ę": "e", "ł": "l", "ń": "n",
+	"ó": "o", "ś": "s", "ź": "z", "ż": "z",
+}
+
 func _slug(name: String) -> String:
 	var s := name.strip_edges().to_lower()
 	var out := ""
 	for ch in s:
+		if TRANSLIT.has(ch):
+			ch = TRANSLIT[ch]
 		if (ch >= "a" and ch <= "z") or (ch >= "0" and ch <= "9"):
 			out += ch
 		elif ch == " " or ch == "-" or ch == "_":
@@ -22,14 +31,28 @@ func _slug(name: String) -> String:
 	return out
 
 # Zapisuje bieżący stan gry. Zwraca ścieżkę pliku.
+# Każda kronika ma własny plik. Raz nadany zapisuje się w Game.save_path,
+# więc kolejne zapisy tej samej rozgrywki aktualizują go zamiast mnożyć pliki,
+# a dwie przygody o tej samej nazwie świata nie kasują się nawzajem.
 func save_current() -> String:
+	if not Game.started:
+		return ""
 	DirAccess.make_dir_recursive_absolute(DIR)
-	var base := _slug(Game.world.get("name", "kronika"))
-	var path := "%s/%s.json" % [DIR, base]
-	var f := FileAccess.open(path, FileAccess.WRITE)
+	if str(Game.save_path) == "":
+		Game.save_path = _new_save_path(str(Game.world.get("name", "kronika")))
+	var f := FileAccess.open(Game.save_path, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(Game.to_dict(), "\t"))
 		f.close()
+	return Game.save_path
+
+func _new_save_path(world_name: String) -> String:
+	var base := "%s_%s" % [_slug(world_name), Time.get_datetime_string_from_system().replace(":", "").replace("-", "").replace("T", "_")]
+	var path := "%s/%s.json" % [DIR, base]
+	var n := 2
+	while FileAccess.file_exists(path):
+		path = "%s/%s-%d.json" % [DIR, base, n]
+		n += 1
 	return path
 
 # Lista zapisanych Kronik posortowana od najnowszej.
@@ -71,6 +94,7 @@ func load_into_game(path: String) -> bool:
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return false
 	Game.from_dict(parsed)
+	Game.save_path = path   # dalsze zapisy trafiają do tego samego pliku
 	return true
 
 func delete_save(path: String) -> void:

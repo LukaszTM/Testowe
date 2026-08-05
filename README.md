@@ -32,7 +32,11 @@ by grać.
   medalion-portret.
 - **Zapisy** — dowolna liczba kronik zapisywanych lokalnie, do wczytania w każdej chwili.
 - **Trzy tryby prowadzenia opowieści:**
-  - *Offline (darmowy)* — prosta narracja proceduralna, bez internetu i kluczy.
+  - *Offline (darmowy)* — uproszczony generator fabularny: składa sceny ze
+    słownictwa wybranego gatunku, bez internetu i kluczy. Klasyfikuje działanie
+    z grubsza (rozmowa, walka, ruch, obserwacja), więc po kilkunastu turach
+    opisy zaczynają się powtarzać — to tryb awaryjny i demonstracyjny,
+    a nie pełnoprawny Mistrz Gry.
   - *Claude API (zalecany)* — pełny **Mistrz Gry w chmurze**: reaguje na to,
     co piszesz, tworzy postacie niezależne z imionami i charakterami oraz
     prowadzi z Tobą ich dialogi. To hostowana usługa Anthropic

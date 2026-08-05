@@ -15,6 +15,7 @@ var discoveries: Array = []    # [{title, type, time}]
 var quests: Array = []         # [{title, note, status}]
 var npcs: Array = []           # [{imie, plec, rola, relacja, tura}] — biblioteka postaci
 var suggestions: Array = []    # podpowiedzi na bieżącą turę (od Mistrza Gry)
+var save_path := ""            # plik tej kroniki (pusty = jeszcze niezapisana)
 
 const ATTR_KEYS := ["sila", "zrecznosc", "intelekt", "charyzma"]
 const ATTR_LABELS := {"sila": "Siła", "zrecznosc": "Zręczność", "intelekt": "Intelekt", "charyzma": "Charyzma"}
@@ -123,6 +124,19 @@ func ensure_character_stats() -> void:
 			["hp", 100], ["mana_max", 0], ["mana", 0], ["dead", false]]:
 		if not character.has(pair[0]):
 			character[pair[0]] = pair[1]
+	recompute_maxima()
+
+# Atrybuty realnie kształtują postać: Siła podnosi maksymalne Zdrowie,
+# Intelekt — maksymalną Manę. Każdy punkt ponad 5 daje +5.
+func recompute_maxima() -> void:
+	var attrs: Dictionary = character.get("attrs", {})
+	character["hp_max"] = 100 + (int(attrs.get("sila", 5)) - 5) * 5
+	if world_has_mana():
+		character["mana_max"] = 100 + (int(attrs.get("intelekt", 5)) - 5) * 5
+	else:
+		character["mana_max"] = 0
+	character["hp"] = clampi(int(character.get("hp", 100)), 0, int(character["hp_max"]))
+	character["mana"] = clampi(int(character.get("mana", 0)), 0, int(character["mana_max"]))
 
 # Wydanie punktu atrybutu (przycisk „+” w Kronice).
 func spend_attr(key: String) -> void:
@@ -131,6 +145,8 @@ func spend_attr(key: String) -> void:
 		return
 	character["attrs"][key] = int(character["attrs"][key]) + 1
 	character["attr_points"] = int(character["attr_points"]) - 1
+	recompute_maxima()
+	Saves.save_character(character)
 	emit_signal("chronicle_changed")
 
 # ——— Rozpoczęcie i przebieg przygody ————————————————————————
@@ -150,14 +166,15 @@ func begin_adventure() -> void:
 	quests.clear()
 	npcs.clear()
 	suggestions.clear()
+	save_path = ""       # nowa kronika = nowy plik, nie nadpisuje poprzednich
 	turn = 0
 	started = true
 
 	# Statystyki: poziom/atrybuty/PD niesie postać (magazyn postaci),
 	# ale zdrowie i mana zaczynają pełne w każdej nowej opowieści.
 	ensure_character_stats()
+	recompute_maxima()
 	character["hp"] = int(character["hp_max"])
-	character["mana_max"] = 100 if world_has_mana() else 0
 	character["mana"] = int(character["mana_max"])
 	character["dead"] = false
 	Saves.save_character(character)
@@ -179,12 +196,17 @@ func take_action(action: String) -> void:
 
 	var prof := profile()
 	var text := ""
-	var roll := {}
 	var state := {}
+
+	# Rzut zapada PRZED narracją i obowiązuje w obu trybach — to gra rozstrzyga
+	# próbę, a Mistrz Gry (także AI) tylko opisuje jej skutek.
+	var roll := {}
+	if _should_roll(action):
+		roll = Narrator.roll_action(rng, _attr_modifier(action))
 
 	if Narrator.ai_enabled():
 		# Akcja gracza jest już ostatnim wpisem historii.
-		text = await Narrator.ai_generate(world, character, history)
+		text = await Narrator.ai_generate(world, character, history, roll)
 		if text != "":
 			var pr := Narrator.parse_state(text)
 			text = pr["text"]
@@ -192,9 +214,6 @@ func take_action(action: String) -> void:
 
 	if text == "":
 		# Tryb offline (także fallback, gdy AI zawiedzie).
-		# Rzut kością tylko wtedy, gdy działanie faktycznie stawia coś na szali.
-		if _should_roll(action):
-			roll = Narrator.roll_action(rng, _attr_modifier(action))
 		text = Narrator.respond(world, character, prof, action, roll, rng)
 
 	var entry := {"role": "narrator", "text": text}
@@ -204,6 +223,9 @@ func take_action(action: String) -> void:
 	_update_memory(action, text)
 	_apply_turn_effects(action, roll, state)
 	emit_signal("chronicle_changed")
+	# Autozapis co pięć tur — długiej rozgrywki nie wolno stracić.
+	if turn % 5 == 0:
+		Saves.save_current()
 
 # ——— Efekty tury: zdrowie, mana, doświadczenie, biblioteka postaci ————
 
@@ -240,9 +262,12 @@ func _apply_turn_effects(action: String, roll: Dictionary, state: Dictionary) ->
 		if character["mana_max"] > 0 and _uses_magic(action):
 			mana_delta -= 12
 
-	# Powolna regeneracja co turę.
-	hp_delta += 2
-	mana_delta += 5
+	# Powolna regeneracja — tylko w spokojnej turze. Rany odniesione teraz
+	# nie zabliźniają się w tej samej scenie.
+	if hp_delta >= 0:
+		hp_delta += 2
+	if mana_delta >= 0:
+		mana_delta += 5
 
 	character["hp"] = clampi(int(character["hp"]) + hp_delta, 0, int(character["hp_max"]))
 	if int(character["mana_max"]) > 0:
@@ -272,6 +297,7 @@ func _check_level_up() -> void:
 			"✦ %s osiąga poziom %d! Masz %d pkt atrybutów do rozdania — panel bohatera w Kronice." % [
 				character.get("name", "Bohater"), int(character["level"]), int(character["attr_points"])]})
 		Saves.save_character(character)
+		Saves.save_current()
 
 func _check_death() -> void:
 	if int(character["hp"]) > 0 or bool(character.get("dead", false)):
@@ -279,6 +305,7 @@ func _check_death() -> void:
 	character["dead"] = true
 	history.append({"role": "narrator", "text":
 		"Świat ciemnieje. %s osuwa się na ziemię — ta kronika dobiega końca. Możesz wrócić do menu i rozpocząć nową opowieść." % character.get("name", "Bohater")})
+	Saves.save_current()
 
 # Podpowiedzi na następną turę, przygotowane przez Mistrza Gry do bieżącej sceny.
 func _set_suggestions(arr) -> void:

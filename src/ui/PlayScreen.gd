@@ -10,37 +10,61 @@ var _status: Label
 var _busy := false
 
 func _ready() -> void:
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for s in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + s, 22)
-	add_child(margin)
+	# Rozłożona księga: opowieść na lewej karcie, Kronika na prawej.
+	var spread := HBoxContainer.new()
+	spread.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	spread.add_theme_constant_override("separation", 6)
+	add_child(spread)
 
-	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 14)
-	margin.add_child(root)
+	spread.add_child(_story_page())
+	spread.add_child(_spine())
+	spread.add_child(_chronicle_page())
 
-	root.add_child(_build_topbar())
+	Game.chronicle_changed.connect(_refresh)
+	Narrator.ai_state.connect(_on_ai_state)
+	_refresh()
+	_scroll_to_bottom()
 
-	var split := HBoxContainer.new()
-	split.add_theme_constant_override("separation", 16)
-	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(split)
+func _spine() -> Control:
+	var c := Control.new()
+	c.custom_minimum_size = Vector2(24, 0)
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if ResourceLoader.exists("res://assets/art/spine.svg"):
+		var r := TextureRect.new()
+		r.texture = load("res://assets/art/spine.svg")
+		r.stretch_mode = TextureRect.STRETCH_SCALE
+		r.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		r.modulate = Color(1, 1, 1, 0.45)
+		c.add_child(r)
+	return c
 
-	# Lewa kolumna: narracja + akcja.
-	var left := VBoxContainer.new()
-	left.add_theme_constant_override("separation", 12)
-	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left.size_flags_stretch_ratio = 2.3
-	split.add_child(left)
+# Lewa karta: nagłówek świata, narracja, podpowiedzi i pole akcji.
+func _story_page() -> Control:
+	var page := Ui.page(26)
+	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	page.size_flags_stretch_ratio = 2.1
+	Ui.add_corners(page, 66)
 
-	var log_card := Ui.card(18)
-	log_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	left.add_child(log_card)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	Ui.page_content(page).add_child(col)
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	col.add_child(head)
+	var title := _plain(Game.world.get("name", "Kronika"), 24, Ui.GOLD)
+	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(title)
+	var tag := _plain("· %s" % Game.world.get("genre_label", ""), 15, Ui.MUTED)
+	tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(tag)
+
+	col.add_child(Ui.flourish())
 
 	var log_scroll := ScrollContainer.new()
 	log_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	log_card.add_child(log_scroll)
+	log_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(log_scroll)
 
 	_log = RichTextLabel.new()
 	_log.bbcode_enabled = true
@@ -48,64 +72,58 @@ func _ready() -> void:
 	_log.scroll_active = false
 	_log.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_log.add_theme_constant_override("line_separation", 6)
-	log_scroll.add_child(_log)
 	_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_log.add_theme_constant_override("line_separation", 7)
+	log_scroll.add_child(_log)
 
-	left.add_child(_build_action_bar())
+	col.add_child(Ui.flourish())
+	col.add_child(_build_action_bar())
+	return page
 
-	# Prawa kolumna: Kronika.
-	var right := Ui.card(16)
-	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right.size_flags_stretch_ratio = 1.0
-	right.custom_minimum_size = Vector2(280, 0)
-	split.add_child(right)
+# Prawa karta: przyciski, stan bohatera i Kronika.
+func _chronicle_page() -> Control:
+	var page := Ui.page(22)
+	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	page.size_flags_stretch_ratio = 1.0
+	page.custom_minimum_size = Vector2(300, 0)
+	Ui.add_corners(page, 66)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	Ui.page_content(page).add_child(col)
+	col.add_child(_build_topbar())
 
 	var right_scroll := ScrollContainer.new()
 	right_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	right.add_child(right_scroll)
+	right_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(right_scroll)
 
 	_chronicle = VBoxContainer.new()
 	_chronicle.add_theme_constant_override("separation", 10)
 	_chronicle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right_scroll.add_child(_chronicle)
-
-	Game.chronicle_changed.connect(_refresh)
-	Narrator.ai_state.connect(_on_ai_state)
-	_refresh()
-	_scroll_to_bottom()
+	return page
 
 func _build_topbar() -> Control:
 	var bar := HBoxContainer.new()
-	bar.add_theme_constant_override("separation", 12)
-	bar.custom_minimum_size = Vector2(0, 46)
+	bar.add_theme_constant_override("separation", 10)
+	bar.custom_minimum_size = Vector2(0, 44)
 
 	# W poziomym pasku etykiety NIE mogą mieć autozawijania — inaczej Godot
 	# zwęża je do jednej litery i rozdmuchuje wysokość całego paska.
-	var title := _plain(Game.world.get("name", "Kronika"), 22, Ui.INK)
-	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	bar.add_child(title)
-
-	var tag := _plain("· %s" % Game.world.get("genre_label", ""), 15, Ui.MUTED)
-	tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	bar.add_child(tag)
-
-	var gap := Control.new()
-	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar.add_child(gap)
-
-	_status = _plain(_mode_note(), 13, Ui.MUTED)
+	_status = _plain(_mode_note(), 12, Ui.MUTED)
 	_status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.add_child(_status)
 
 	var save := Ui.button("Zapisz")
-	save.custom_minimum_size = Vector2(110, 40)
+	save.custom_minimum_size = Vector2(104, 38)
 	save.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	save.pressed.connect(_on_save)
 	bar.add_child(save)
 
 	var menu := Ui.button("Menu")
-	menu.custom_minimum_size = Vector2(90, 40)
+	menu.custom_minimum_size = Vector2(86, 38)
 	menu.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	# Wyjście do menu zapisuje kronikę — nic nie przepada.
 	menu.pressed.connect(func():
@@ -118,7 +136,7 @@ func _build_topbar() -> Control:
 func _plain(txt: String, size: int, col: Color) -> Label:
 	var l := Label.new()
 	l.text = txt
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", Ui.fs(size))
 	l.add_theme_color_override("font_color", col)
 	return l
 
@@ -194,9 +212,9 @@ func _rebuild_suggestions() -> void:
 	for i in range(mini(3, pool.size())):
 		var text: String = str(pool[i])
 		var chip := Ui.button(text)
-		chip.custom_minimum_size = Vector2(0, 40)
+		chip.custom_minimum_size = Vector2(0, Ui.fs(40))
 		chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		chip.add_theme_font_size_override("font_size", 15)
+		chip.add_theme_font_size_override("font_size", Ui.fs(15))
 		chip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		chip.pressed.connect(_submit.bind(text))
 		grid.add_child(chip)
@@ -230,14 +248,23 @@ func _set_busy(b: bool) -> void:
 
 func _render_log() -> void:
 	var out := ""
+	var first_scene := true
 	for e in Game.history:
 		if e["role"] == "player":
-			out += "[color=#cfa24a]➤ %s[/color]\n\n" % _esc(e["text"])
+			out += "[color=#6d4f12]➤ %s[/color]\n\n" % _esc(e["text"])
 		else:
 			if e.has("roll"):
 				var r: Dictionary = e["roll"]
-				out += "[color=#8a7f68]🎲 rzut %d → %s[/color]\n" % [r["die"], r["tier"]]
-			out += "%s\n\n" % _esc(e["text"])
+				out += "[color=#857055]🎲 rzut %d → %s[/color]\n" % [r["die"], r["tier"]]
+			var txt := _esc(e["text"])
+			if first_scene and txt.length() > 1:
+				# Iluminowany inicjał otwierający kronikę, jak w starej księdze.
+				out += "[color=#8a6a1f][font_size=%d]%s[/font_size][/color]%s\n\n" % [
+					Ui.fs(46), txt.left(1), txt.substr(1)]
+				first_scene = false
+			else:
+				out += "%s\n\n" % txt
+				first_scene = false
 	_log.text = out.strip_edges()
 
 func _esc(s: String) -> String:

@@ -27,7 +27,12 @@ func _ready() -> void:
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for s in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_" + s, 36)
-	add_child(margin)
+	# Karta pergaminu pod całą zawartością ekranu.
+	var page := Ui.page(0)
+	page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(page)
+	Ui.add_corners(page, 70)
+	Ui.page_content(page).add_child(margin)
 
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED

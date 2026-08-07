@@ -4,50 +4,31 @@ extends Control
 var _list: VBoxContainer
 
 func _ready() -> void:
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for s in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + s, 40)
-	# Karta pergaminu pod całą zawartością ekranu.
-	var page := Ui.page(0)
-	page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(page)
-	Ui.add_corners(page, 70)
-	Ui.page_content(page).add_child(margin)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(Ui.title_bar("Zapisane kroniki"))
+	add_child(Ui.hint_page("Kroniki", [
+		"Każda opowieść zapisuje się do własnego pliku — nowa gra nigdy nie nadpisze poprzedniej.",
+		"",
+		"Gra zapisuje się sama po każdej turze, a także przy wyjściu do menu.",
+		"",
+		"Pliki leżą w katalogu danych gry, w podfolderze „zapisy”.",
+	]))
+	var c := Ui.scroll_column(Ui.R_PAGE_L, 12)
+	add_child(c["host"])
+	var col: VBoxContainer = c["box"]
 
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	margin.add_child(scroll)
-
-	var center := HBoxContainer.new()
-	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(center)
-
-	var lsp := Control.new()
-	lsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.add_child(lsp)
-
-	var col := VBoxContainer.new()
-	col.custom_minimum_size = Vector2(620, 0)
-	col.add_theme_constant_override("separation", 12)
-	center.add_child(col)
-
-	var rsp := Control.new()
-	rsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.add_child(rsp)
-
-	col.add_child(Ui.title("Zapisane kroniki", 32))
-	col.add_child(Ui.spacer(4))
 
 	_list = VBoxContainer.new()
 	_list.add_theme_constant_override("separation", 10)
 	col.add_child(_list)
 	_populate()
 
-	col.add_child(Ui.spacer(8))
+	var bar := Ui.action_bar()
+	add_child(bar["host"])
 	var back := Ui.button("Wstecz")
+	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	(bar["row"] as HBoxContainer).add_child(back)
 	back.pressed.connect(func(): Game.router.goto("menu"))
-	col.add_child(back)
 
 func _populate() -> void:
 	for c in _list.get_children():
@@ -74,16 +55,16 @@ func _row(s: Dictionary) -> Control:
 	if s.get("saved_at", "") != "":
 		info.add_child(Ui.subtle("zapis: %s" % s["saved_at"], 12))
 
-	var load_btn := Ui.button("Wczytaj", true)
-	load_btn.custom_minimum_size = Vector2(120, 42)
+	var load_btn := Ui.small_button("Wczytaj", true)
+	load_btn.custom_minimum_size = Vector2(140, 48)
 	load_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	load_btn.pressed.connect(func():
 		if Saves.load_into_game(s["path"]):
 			Game.router.goto("play"))
 	box.add_child(load_btn)
 
-	var del := Ui.button("Usuń")
-	del.custom_minimum_size = Vector2(90, 42)
+	var del := Ui.small_button("Usuń")
+	del.custom_minimum_size = Vector2(110, 48)
 	del.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	del.pressed.connect(func():
 		Saves.delete_save(s["path"])

@@ -23,38 +23,22 @@ var _test_result: Label
 var _res_values: Array = []
 
 func _ready() -> void:
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for s in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + s, 36)
-	# Karta pergaminu pod całą zawartością ekranu.
-	var page := Ui.page(0)
-	page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(page)
-	Ui.add_corners(page, 70)
-	Ui.page_content(page).add_child(margin)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(Ui.title_bar("Ustawienia"))
+	add_child(Ui.hint_page("Co tu ustawisz", [
+		"# Obraz",
+		"Gra rysuje się zawsze w tej samej przestrzeni i skaluje do okna, więc każda rozdzielczość pokazuje ten sam układ księgi.",
+		"# Wielkość tekstu",
+		"Podnieś, jeśli czytasz z daleka albo na dużym ekranie. Działa po zapisaniu.",
+		"# Mistrz Gry",
+		"Offline to prosta narracja proceduralna. Claude API prowadzi pełną rozgrywkę: tworzy postacie, ich dialogi i reaguje na Twoje decyzje.",
+		"# Klucz API",
+		"Zapisuje się tylko na tym komputerze, w pliku ustawień.",
+	]))
+	var c := Ui.scroll_column(Ui.R_PAGE_L, 12)
+	add_child(c["host"])
+	var col: VBoxContainer = c["box"]
 
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	margin.add_child(scroll)
-
-	var center := HBoxContainer.new()
-	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(center)
-	var lsp := Control.new()
-	lsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.add_child(lsp)
-
-	var col := VBoxContainer.new()
-	col.custom_minimum_size = Vector2(560, 0)
-	col.add_theme_constant_override("separation", 12)
-	center.add_child(col)
-
-	var rsp := Control.new()
-	rsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.add_child(rsp)
-
-	col.add_child(Ui.title("Ustawienia", 32))
 
 	# ——— Obraz ———
 	col.add_child(Ui.heading("Obraz", 19))
@@ -155,8 +139,8 @@ func _ready() -> void:
 	var trow := HBoxContainer.new()
 	trow.add_theme_constant_override("separation", 12)
 	_claude_rows.add_child(trow)
-	_test_btn = Ui.button("Testuj połączenie")
-	_test_btn.custom_minimum_size = Vector2(220, Ui.fs(42))
+	_test_btn = Ui.small_button("Testuj połączenie")
+	_test_btn.custom_minimum_size = Vector2(240, 48)
 	_test_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_test_btn.pressed.connect(_on_test_api)
 	trow.add_child(_test_btn)
@@ -176,9 +160,9 @@ func _ready() -> void:
 	_ollama_rows.add_child(model["row"])
 
 	col.add_child(Ui.spacer(10))
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	col.add_child(row)
+	var bar := Ui.action_bar()
+	add_child(bar["host"])
+	var row: HBoxContainer = bar["row"]
 	var back := Ui.button("Wstecz")
 	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	back.pressed.connect(func(): Game.router.goto("menu"))
@@ -188,7 +172,6 @@ func _ready() -> void:
 	save.pressed.connect(_save)
 	row.add_child(save)
 
-	col.add_child(Ui.spacer(20))
 	_toggle_ai()
 
 # Etykieta wartości (np. „%”) bez zawijania — stała szerokość, do rzędów z suwakiem.

@@ -18,39 +18,24 @@ const NAME_B := ["Północy", "Starego Traktu", "Zatoki", "Żelaznej Doliny",
 	"Siódmego Miasta", "Pogranicza", "Mgły", "Bursztynu", "Kamiennych Pól", "Utraconych"]
 
 func _ready() -> void:
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for s in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + s, 40)
-	# Karta pergaminu pod całą zawartością ekranu.
-	var page := Ui.page(0)
-	page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(page)
-	Ui.add_corners(page, 70)
-	Ui.page_content(page).add_child(margin)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(Ui.title_bar("Stwórz świat"))
+	add_child(Ui.hint_page("Zanim ruszysz", [
+		"Świat to reguły, w których będzie się toczyć Twoja opowieść.",
+		"",
+		"# Gatunek",
+		"Podpowiada Mistrzowi Gry rekwizyty, miejsca i typ zagrożeń.",
+		"# Charakter opowieści",
+		"Decyduje o tonie. „Łagodna” prowadzi przygodowo i spokojnie, „mroczna” od pierwszej sceny podnosi stawkę.",
+		"# Nadnaturalność",
+		"Jeśli wpiszesz tu magię, Twoja postać dostanie pulę many.",
+		"",
+		"Żadne pole nie jest obowiązkowe — puste uzupełni szablon gatunku.",
+	]))
+	var c := Ui.scroll_column(Ui.R_PAGE_L, 14)
+	add_child(c["host"])
+	var col: VBoxContainer = c["box"]
 
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	margin.add_child(scroll)
-
-	var center := HBoxContainer.new()
-	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(center)
-
-	var lsp := Control.new()
-	lsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.add_child(lsp)
-
-	var col := VBoxContainer.new()
-	col.custom_minimum_size = Vector2(620, 0)
-	col.add_theme_constant_override("separation", 14)
-	center.add_child(col)
-
-	var rsp := Control.new()
-	rsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.add_child(rsp)
-
-	col.add_child(Ui.title("Stwórz świat", 34))
 	col.add_child(Ui.subtle("To Ty ustalasz reguły. Wybierz gatunek, a resztę pól dopasuj do własnej wizji — albo zostaw szablon.", 15))
 	col.add_child(Ui.spacer(4))
 
@@ -77,10 +62,10 @@ func _ready() -> void:
 	_f["tone"] = _add(col, Ui.field("Ton opowieści", "np. mroczny, przygodowy, kameralny"))
 	_f["start_location"] = _add(col, Ui.field("Lokacja startowa", "gdzie zaczyna się historia"))
 
-	col.add_child(Ui.spacer(8))
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	col.add_child(row)
+	col.add_child(Ui.spacer(10))
+	var bar := Ui.action_bar()
+	add_child(bar["host"])
+	var row: HBoxContainer = bar["row"]
 
 	var back := Ui.button("Wstecz")
 	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -91,8 +76,6 @@ func _ready() -> void:
 	next.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	next.pressed.connect(_go_next)
 	row.add_child(next)
-
-	col.add_child(Ui.spacer(20))
 
 	# Wstępnie wypełnij pierwszym gatunkiem, jeśli świat jest pusty.
 	if Game.world.is_empty():

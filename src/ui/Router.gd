@@ -1,49 +1,45 @@
 extends Control
 
-# Korzeń aplikacji. Buduje oprawę księgi (skóra, winieta) i przełącza ekrany,
-# które rozgrywają się „na kartach” w środku.
+# Korzeń aplikacji. Pod spodem leży płyta z grafiką księgi (menu albo rozgrywka),
+# a ekrany dokładają na nią tylko żywe kontrolki: napisy, przyciski, pola.
 
 var _current: Control
-var _stage: Control      # miejsce, w którym żyją ekrany
+var _plate: TextureRect
+var _stage: Control
+
+# Który ekran korzysta z której płyty.
+const PLATES := {
+	"menu": "plate_menu",
+	"world": "plate_play",
+	"character": "plate_play",
+	"play": "plate_play",
+	"load": "plate_play",
+	"settings": "plate_play",
+}
 
 func _ready() -> void:
 	theme = Ui.build_theme()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	# Skórzana oprawa.
-	var leather := TextureRect.new()
-	leather.texture = Ui.leather_texture()
-	leather.stretch_mode = TextureRect.STRETCH_TILE
-	leather.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	leather.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(leather)
-
-	# Miejsce na ekrany — z marginesem, żeby widać było oprawę dookoła.
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for s in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + s, 18)
-	add_child(margin)
+	_plate = TextureRect.new()
+	_plate.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_plate.stretch_mode = TextureRect.STRETCH_SCALE
+	_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_plate)
 
 	_stage = Control.new()
-	_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	margin.add_child(_stage)
-
-	# Światło świecy: przyciemnione krawędzie ekranu.
-	var vignette := TextureRect.new()
-	vignette.texture = Ui.vignette_texture()
-	vignette.stretch_mode = TextureRect.STRETCH_SCALE
-	vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(vignette)
+	_stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_stage)
 
 	Game.router = self
 	goto("menu")
 
-func goto(screen: String, arg = null) -> void:
+func goto(screen: String, _arg = null) -> void:
 	if _current and is_instance_valid(_current):
 		_current.queue_free()
+	_plate.texture = Ui.art(str(PLATES.get(screen, "plate_play")))
 	var node: Control
 	match screen:
 		"menu": node = MainMenu.new()
@@ -55,4 +51,5 @@ func goto(screen: String, arg = null) -> void:
 		_: node = MainMenu.new()
 	_current = node
 	node.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stage.add_child(node)

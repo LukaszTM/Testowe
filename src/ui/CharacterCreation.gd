@@ -25,38 +25,22 @@ const NAMES_M := ["Marek", "Iwo", "Kasjan", "Bruno", "Wit", "Kaj", "Otto", "Emil
 const NAMES_F := ["Halina", "Zofia", "Nadia", "Lena", "Roza", "Mira", "Sława", "Danka", "Iga", "Wanda"]
 
 func _ready() -> void:
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for s in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + s, 40)
-	# Karta pergaminu pod całą zawartością ekranu.
-	var page := Ui.page(0)
-	page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(page)
-	Ui.add_corners(page, 70)
-	Ui.page_content(page).add_child(margin)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(Ui.title_bar("Twoja postać"))
+	add_child(Ui.hint_page("Kim będziesz", [
+		"Postać zostaje z Tobą — po zakończeniu opowieści trafia do magazynu i możesz nią zagrać w kolejnym świecie.",
+		"",
+		"# Atrybuty",
+		"Siła podnosi maksimum zdrowia, Intelekt — many. Zręczność i Charyzma poprawiają rzuty w scenach, w których coś stawiasz na szali.",
+		"# Awatar",
+		"Możesz wskazać własny obrazek z dysku. Zostanie skopiowany do plików gry.",
+		"# Archetyp",
+		"Nie ogranicza Cię — to punkt wyjścia, który Mistrz Gry weźmie pod uwagę w pierwszej scenie.",
+	]))
+	var c := Ui.scroll_column(Ui.R_PAGE_L, 14)
+	add_child(c["host"])
+	var col: VBoxContainer = c["box"]
 
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	margin.add_child(scroll)
-
-	var center := HBoxContainer.new()
-	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(center)
-	var lsp := Control.new()
-	lsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.add_child(lsp)
-
-	var col := VBoxContainer.new()
-	col.custom_minimum_size = Vector2(600, 0)
-	col.add_theme_constant_override("separation", 14)
-	center.add_child(col)
-
-	var rsp := Control.new()
-	rsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.add_child(rsp)
-
-	col.add_child(Ui.title("Twoja postać", 34))
 	col.add_child(Ui.subtle("Świat „%s” czeka na bohatera. Wybierz, kim wejdziesz w jego historię." % Game.world.get("name", ""), 15))
 	col.add_child(Ui.spacer(4))
 
@@ -115,10 +99,10 @@ func _ready() -> void:
 	roll_btn.pressed.connect(_randomize)
 	col.add_child(roll_btn)
 
-	col.add_child(Ui.spacer(8))
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	col.add_child(row)
+	col.add_child(Ui.spacer(10))
+	var bar := Ui.action_bar()
+	add_child(bar["host"])
+	var row: HBoxContainer = bar["row"]
 
 	var back := Ui.button("Wstecz")
 	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -130,7 +114,6 @@ func _ready() -> void:
 	start.pressed.connect(_start)
 	row.add_child(start)
 
-	col.add_child(Ui.spacer(20))
 
 func _add(col: VBoxContainer, spec: Dictionary) -> Control:
 	col.add_child(spec["row"])

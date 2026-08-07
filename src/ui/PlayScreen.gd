@@ -1,70 +1,55 @@
 class_name PlayScreen
 extends Control
 
+# Ekran rozgrywki. Grafika księgi jest pod spodem (Router), a tutaj siadają
+# tylko żywe kontrolki — dokładnie w obszarach wyciętych z makiety.
+
 var _log: RichTextLabel
 var _input: TextEdit
+var _input_host: Control
 var _send: Button
-var _suggest_box: VBoxContainer
+var _hints_lbl: Control
+var _hints_row: HBoxContainer
+var _hints_host: Control
 var _chronicle: VBoxContainer
 var _status: Label
+var _title: Label
 var _busy := false
 
 func _ready() -> void:
-	# Rozłożona księga: opowieść na lewej karcie, Kronika na prawej.
-	var spread := HBoxContainer.new()
-	spread.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	spread.add_theme_constant_override("separation", 6)
-	add_child(spread)
-
-	spread.add_child(_story_page())
-	spread.add_child(_spine())
-	spread.add_child(_chronicle_page())
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_build_left()
+	_build_right()
 
 	Game.chronicle_changed.connect(_refresh)
 	Narrator.ai_state.connect(_on_ai_state)
 	_refresh()
+	_rebuild_suggestions()
 	_scroll_to_bottom()
 
-func _spine() -> Control:
-	var c := Control.new()
-	c.custom_minimum_size = Vector2(24, 0)
-	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if ResourceLoader.exists("res://assets/art/spine.svg"):
-		var r := TextureRect.new()
-		r.texture = load("res://assets/art/spine.svg")
-		r.stretch_mode = TextureRect.STRETCH_SCALE
-		r.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		r.modulate = Color(1, 1, 1, 0.45)
-		c.add_child(r)
-	return c
+# ——— Lewa karta: tytuł, narracja, podpowiedzi, pole polecenia ————————
 
-# Lewa karta: nagłówek świata, narracja, podpowiedzi i pole akcji.
-func _story_page() -> Control:
-	var page := Ui.page(26)
-	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	page.size_flags_stretch_ratio = 2.1
-	Ui.add_corners(page, 66)
-
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 8)
-	Ui.page_content(page).add_child(col)
-
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 10)
-	col.add_child(head)
-	var title := _plain(Game.world.get("name", "Kronika"), 24, Ui.GOLD)
-	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(title)
-	var tag := _plain("· %s" % Game.world.get("genre_label", ""), 15, Ui.MUTED)
+func _build_left() -> void:
+	var th := Ui.region(Ui.R_TITLE)
+	add_child(th)
+	var trow := HBoxContainer.new()
+	trow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	trow.add_theme_constant_override("separation", 12)
+	th.add_child(trow)
+	_title = Ui.title(str(Game.world.get("name", "Kronika")), 30)
+	_title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	trow.add_child(_title)
+	var tag := Ui.subtle("· %s" % Game.world.get("genre_label", ""), 16)
+	tag.autowrap_mode = TextServer.AUTOWRAP_OFF
 	tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(tag)
+	trow.add_child(tag)
 
-	col.add_child(Ui.flourish())
-
-	var log_scroll := ScrollContainer.new()
-	log_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	log_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(log_scroll)
+	var host := Ui.region(Ui.R_PAGE_L)
+	add_child(host)
+	var sc := ScrollContainer.new()
+	sc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	host.add_child(sc)
 
 	_log = RichTextLabel.new()
 	_log.bbcode_enabled = true
@@ -72,119 +57,99 @@ func _story_page() -> Control:
 	_log.scroll_active = false
 	_log.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_log.add_theme_constant_override("line_separation", 7)
-	log_scroll.add_child(_log)
+	_log.add_theme_constant_override("line_separation", 8)
+	sc.add_child(_log)
 
-	col.add_child(Ui.flourish())
-	col.add_child(_build_action_bar())
-	return page
+	_hints_lbl = Ui.region(Ui.R_HINTS_LBL)
+	add_child(_hints_lbl)
+	var hl := Ui.subtle("PODPOWIEDZI", 13)
+	hl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	hl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_hints_lbl.add_child(hl)
 
-# Prawa karta: przyciski, stan bohatera i Kronika.
-func _chronicle_page() -> Control:
-	var page := Ui.page(22)
-	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	page.size_flags_stretch_ratio = 1.0
-	page.custom_minimum_size = Vector2(300, 0)
-	Ui.add_corners(page, 66)
+	_hints_host = Ui.region(Ui.R_HINTS)
+	add_child(_hints_host)
+	_hints_row = HBoxContainer.new()
+	_hints_row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_hints_row.add_theme_constant_override("separation", 10)
+	_hints_host.add_child(_hints_row)
 
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 8)
-	Ui.page_content(page).add_child(col)
-	col.add_child(_build_topbar())
+	_input_host = Ui.region(Ui.R_INPUT)
+	add_child(_input_host)
+	_input = TextEdit.new()
+	_input.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_input.placeholder_text = "Opisz, co robi Twoja postać…"
+	_input.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_input.scroll_fit_content_height = true
+	_input.text_changed.connect(_resize_input)
+	_input.gui_input.connect(_input_gui)
+	_input_host.add_child(_input)
 
-	var right_scroll := ScrollContainer.new()
-	right_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	right_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(right_scroll)
+	var eh := Ui.region(Ui.R_EXEC)
+	add_child(eh)
+	_send = Ui.small_button("Wykonaj", true)
+	_send.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_send.add_theme_font_size_override("font_size", Ui.fs(21))
+	_send.pressed.connect(func(): _submit(_input.text))
+	eh.add_child(_send)
 
-	_chronicle = VBoxContainer.new()
-	_chronicle.add_theme_constant_override("separation", 10)
-	_chronicle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_scroll.add_child(_chronicle)
-	return page
+# ——— Prawa karta: stan Mistrza Gry, przyciski, Kronika ————————————
 
-func _build_topbar() -> Control:
-	var bar := HBoxContainer.new()
-	bar.add_theme_constant_override("separation", 10)
-	bar.custom_minimum_size = Vector2(0, 44)
+func _build_right() -> void:
+	var sh := Ui.region(Ui.R_STATUS)
+	add_child(sh)
+	_status = Ui.subtle(_mode_note(), 14)
+	_status.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_status.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_status.clip_text = true
+	sh.add_child(_status)
 
-	# W poziomym pasku etykiety NIE mogą mieć autozawijania — inaczej Godot
-	# zwęża je do jednej litery i rozdmuchuje wysokość całego paska.
-	_status = _plain(_mode_note(), 12, Ui.MUTED)
-	_status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar.add_child(_status)
-
-	var save := Ui.button("Zapisz")
-	save.custom_minimum_size = Vector2(104, 38)
-	save.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var ah := Ui.region(Ui.R_BTN_A)
+	add_child(ah)
+	var save := Ui.small_button("Zapisz")
+	save.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	save.pressed.connect(_on_save)
-	bar.add_child(save)
+	ah.add_child(save)
 
-	var menu := Ui.button("Menu")
-	menu.custom_minimum_size = Vector2(86, 38)
-	menu.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var bh := Ui.region(Ui.R_BTN_B)
+	add_child(bh)
+	var menu := Ui.small_button("Menu")
+	menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# Wyjście do menu zapisuje kronikę — nic nie przepada.
 	menu.pressed.connect(func():
 		Saves.save_current()
 		Game.router.goto("menu"))
-	bar.add_child(menu)
-	return bar
+	bh.add_child(menu)
 
-# Etykieta bez zawijania — do poziomego paska.
-func _plain(txt: String, size: int, col: Color) -> Label:
-	var l := Label.new()
-	l.text = txt
-	l.add_theme_font_size_override("font_size", Ui.fs(size))
-	l.add_theme_color_override("font_color", col)
-	return l
+	var host := Ui.region(Ui.R_PAGE_R)
+	add_child(host)
+	var sc := ScrollContainer.new()
+	sc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	host.add_child(sc)
+	_chronicle = VBoxContainer.new()
+	_chronicle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_chronicle.add_theme_constant_override("separation", 9)
+	sc.add_child(_chronicle)
 
-func _build_action_bar() -> Control:
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
+# ——— Pole polecenia ————————————————————————————————————————
 
-	_suggest_box = VBoxContainer.new()
-	_suggest_box.add_theme_constant_override("separation", 8)
-	box.add_child(_suggest_box)
-	_rebuild_suggestions()
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	box.add_child(row)
-
-	# Pole akcji: zawija długi tekst i rośnie do trzech linii.
-	_input = TextEdit.new()
-	_input.placeholder_text = "Opisz, co robi Twoja postać…"
-	_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_input.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_input.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	_input.scroll_fit_content_height = true
-	_input.custom_minimum_size = Vector2(0, _input_height(1))
-	_input.text_changed.connect(_resize_input)
-	_input.gui_input.connect(_input_gui)
-	row.add_child(_input)
-
-	_send = Ui.button("Wykonaj", true)
-	_send.custom_minimum_size = Vector2(130, 46)
-	_send.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_send.pressed.connect(func(): _submit(_input.text))
-	row.add_child(_send)
-	return box
-
-# Wysokość pola dla danej liczby linii (z marginesami stylu).
-func _input_height(lines: int) -> int:
-	return int(_input.get_line_height() * lines + Ui.fs(22))
-
-# Rośnie razem z tekstem, maksymalnie do trzech linii.
+# Pole rośnie w górę, maksymalnie do trzech linii; wtedy chowa podpowiedzi.
 func _resize_input() -> void:
-	var lines := clampi(_input.get_line_count(), 1, 3)
-	# Zawijanie tworzy dodatkowe linie wizualne — uwzględnij je.
 	var visual := 0
 	for i in range(_input.get_line_count()):
 		visual += _input.get_line_wrap_count(i) + 1
-	lines = clampi(maxi(lines, visual), 1, 3)
-	_input.custom_minimum_size = Vector2(0, _input_height(lines))
+	var lines := clampi(visual, 1, 3)
+	var h: float = Ui.R_INPUT.size.y + float(lines - 1) * 26.0
+	var bottom: float = Ui.R_INPUT.position.y + Ui.R_INPUT.size.y
+	_input_host.offset_top = bottom - h
+	var roomy := lines == 1
+	_hints_host.visible = roomy and _hints_row.get_child_count() > 0
+	_hints_lbl.visible = _hints_host.visible
 
 # Enter wysyła akcję; Shift+Enter przechodzi do nowej linii.
 func _input_gui(ev: InputEvent) -> void:
@@ -195,7 +160,7 @@ func _input_gui(ev: InputEvent) -> void:
 				_submit(_input.text)
 
 func _rebuild_suggestions() -> void:
-	for c in _suggest_box.get_children():
+	for c in _hints_row.get_children():
 		c.queue_free()
 	# W trybie Mistrza Gry podpowiedzi pochodzą z bieżącej sceny; offline —
 	# z puli gatunku.
@@ -203,21 +168,16 @@ func _rebuild_suggestions() -> void:
 	if pool.is_empty():
 		pool = (Game.profile().get("suggestions", []) as Array).duplicate()
 		pool.shuffle()
-	if pool.is_empty():
-		return
-	_suggest_box.add_child(Ui.subtle("PODPOWIEDZI", 12))
-	var grid := HBoxContainer.new()
-	grid.add_theme_constant_override("separation", 8)
-	_suggest_box.add_child(grid)
-	for i in range(mini(3, pool.size())):
+	var shown := mini(3, pool.size())
+	for i in range(shown):
 		var text: String = str(pool[i])
-		var chip := Ui.button(text)
-		chip.custom_minimum_size = Vector2(0, Ui.fs(40))
+		var chip := Ui.chip_button(text)
 		chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		chip.add_theme_font_size_override("font_size", Ui.fs(15))
-		chip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		chip.pressed.connect(_submit.bind(text))
-		grid.add_child(chip)
+		_hints_row.add_child(chip)
+	var vis := shown > 0 and not bool(Game.character.get("dead", false))
+	_hints_host.visible = vis
+	_hints_lbl.visible = vis
 
 func _submit(text: String) -> void:
 	if _busy or bool(Game.character.get("dead", false)):
@@ -284,7 +244,8 @@ func _refresh() -> void:
 	if bool(Game.character.get("dead", false)):
 		_input.editable = false
 		_send.disabled = true
-		_suggest_box.visible = false
+		_hints_host.visible = false
+		_hints_lbl.visible = false
 		_status.text = "Kronika dobiegła końca"
 
 func _render_chronicle() -> void:
@@ -337,9 +298,9 @@ func _render_hero_card() -> void:
 		lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(lbl)
 		if pts > 0:
-			var plus := Ui.button("+")
-			plus.custom_minimum_size = Vector2(34, 30)
-			plus.add_theme_font_size_override("font_size", 15)
+			var plus := Ui.small_button("+")
+			plus.custom_minimum_size = Vector2(48, 40)
+			plus.add_theme_font_size_override("font_size", Ui.fs(18))
 			plus.pressed.connect(Game.spend_attr.bind(k))
 			row.add_child(plus)
 	_chronicle.add_child(Ui.hsep())
@@ -367,10 +328,10 @@ func _render_npcs() -> void:
 func _npc_tile(n: Dictionary) -> Control:
 	var tile := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Ui.BG_SOFT
-	sb.set_corner_radius_all(8)
+	sb.bg_color = Color(0.36, 0.27, 0.14, 0.12)
+	sb.set_corner_radius_all(4)
 	sb.set_border_width_all(1)
-	sb.border_color = Ui.LINE
+	sb.border_color = Color(0.54, 0.42, 0.20, 0.45)
 	sb.content_margin_left = 8
 	sb.content_margin_right = 8
 	sb.content_margin_top = 6
@@ -415,8 +376,8 @@ func _show_npc_card(n: Dictionary) -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(center)
 
-	var card := Ui.card(22)
-	card.custom_minimum_size = Vector2(440, 0)
+	var card := _paper_card(26)
+	card.custom_minimum_size = Vector2(520, 0)
 	center.add_child(card)
 
 	var col := VBoxContainer.new()
@@ -447,7 +408,7 @@ func _show_npc_card(n: Dictionary) -> void:
 	col.add_child(rel)
 
 	col.add_child(Ui.spacer(6))
-	var close := Ui.button("Zamknij")
+	var close := Ui.small_button("Zamknij")
 	close.pressed.connect(func(): overlay.queue_free())
 	col.add_child(close)
 
@@ -489,3 +450,20 @@ func _mode_note() -> String:
 		"ollama":
 			return "Mistrz Gry: %s (lokalnie)" % Game.settings.get("ai_model", "")
 	return "Tryb offline · narracja proceduralna"
+
+# Karta na ciemnej nakładce potrzebuje własnego kawałka pergaminu.
+func _paper_card(pad := 24) -> PanelContainer:
+	var p := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Ui.PANEL
+	sb.set_corner_radius_all(5)
+	sb.set_border_width_all(3)
+	sb.border_color = Ui.GOLD
+	sb.shadow_size = 18
+	sb.shadow_color = Color(0, 0, 0, 0.5)
+	sb.content_margin_left = pad
+	sb.content_margin_right = pad
+	sb.content_margin_top = pad
+	sb.content_margin_bottom = pad
+	p.add_theme_stylebox_override("panel", sb)
+	return p

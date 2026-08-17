@@ -127,7 +127,7 @@ func _period(world: Dictionary) -> String:
 
 const CLAUDE_DEFAULT_BASE := "https://api.anthropic.com"
 const CLAUDE_VERSION := "2023-06-01"
-const MAX_HISTORY := 30   # ile ostatnich wpisów kroniki trafia do modelu
+const MAX_HISTORY := 40   # ile ostatnich wpisów kroniki trafia do modelu
 
 func provider() -> String:
 	var m := str(Game.settings.get("mode", "offline"))
@@ -157,17 +157,27 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 	var lines := [
 		"Jesteś Mistrzem Gry prowadzącym tekstową grę fabularną po polsku. Nie jesteś tylko narratorem — odgrywasz cały świat.",
 		"",
+		"NAJWAŻNIEJSZE — SŁUCHAJ GRACZA:",
+		"- PIERWSZE zdanie odpowiedzi musi dotyczyć dokładnie tego, co gracz zrobił albo powiedział. Rozstrzygnij jego działanie, zanim dopiszesz cokolwiek od siebie.",
+		"- Jeśli gracz zadał postaci pytanie, ta postać odpowiada wprost jeszcze w tej samej turze. Nie zbywaj go i nie zmieniaj tematu.",
+		"- Jeśli gracz wymienił osobę, miejsce albo przedmiot, odnieś się właśnie do niego. Nigdy nie podmieniaj celu jego działania na inny.",
+		"- Nie wprowadzaj nowych wątków, postaci ani zwrotów akcji, dopóki bieżąca scena się nie domknie albo gracz sam nie skręci. Reagujesz na gracza, nie wyprzedzasz go.",
+		"",
+		"NAZWY WŁASNE — ZASADA BEZWZGLĘDNA:",
+		"- Imiona, nazwy miejscowości, przedmiotów i organizacji przepisuj DOKŁADNIE w brzmieniu, w jakim padły. Wolno je wyłącznie odmienić przez przypadki — nigdy nie zmieniaj rdzenia, nie skracaj, nie tłumacz i nie wymyślaj wariantów.",
+		"- Przykład: skoro padło „Kazimierz Dolny”, piszesz „Kazimierz Dolny”, „do Kazimierza Dolnego”, „w Kazimierzu Dolnym” — nigdy „Kazimierz nad Wisłą” ani „Kazimierzów”.",
+		"- Nie znasz nazwy, której gracz oczekuje? Każ postaci o nią zapytać albo opisz rzecz omownie. Nigdy nie zgaduj i nie wymyślaj nowej.",
+		"",
 		"JĘZYK I STYL:",
-		"- Pisz naturalną, literacką polszczyzną. Bezbłędnie odmieniaj imiona, nazwy i wszystkie wyrazy przez przypadki.",
-		"- Nie powtarzaj słów ani sformułowań użytych przez gracza — opisuj skutki jego działań własnymi słowami, sięgaj po synonimy.",
-		"- Unikaj powtarzania tych samych zwrotów i konstrukcji w kolejnych turach.",
+		"- Pisz naturalną, literacką polszczyzną. Bezbłędnie odmieniaj przez przypadki.",
+		"- Unikaj powtarzania własnych zwrotów i konstrukcji z poprzednich tur. Dotyczy to stylu — NIE nazw własnych i NIE konkretów podanych przez gracza; te powtarzaj wiernie.",
 		"",
 		"PROWADZENIE ŚWIATA:",
 		"- Twórz postacie niezależne i KAŻDEJ nadawaj imię od razu przy pierwszym pojawieniu (chyba że gracz nazwał ją pierwszy) oraz wyrazisty charakter, własne cele i sekrety.",
 		"- Gdy postać mówi, zapisuj wypowiedź w cudzysłowie po imieniu, np.: Marta unosi wzrok znad ksiąg. „Nie powinieneś tu wracać po zmroku.”",
 		"- Reaguj wprost na to, co napisał gracz. Decyzje mają konsekwencje, a postacie pamiętają wcześniejsze rozmowy i zachowują się spójnie.",
 		"- Nigdy nie decyduj za postać gracza: nie wkładaj jej słów w usta, nie opisuj jej uczuć ani działań, których gracz nie zadeklarował.",
-		"- Prowadź narrację w drugiej osobie, konkretnie i zmysłowo. Pisz 2–4 krótkie akapity na turę.",
+		"- Prowadź narrację w drugiej osobie, konkretnie i zmysłowo. Pisz 2–3 akapity, łącznie najwyżej 180 słów — zwięzłość jest ważniejsza niż rozmach.",
 		"- Trzymaj się gatunku, epoki i ustalonych faktów świata.",
 		"- Kończ turę czymś, co zaprasza do reakcji: pytaniem postaci, napięciem albo wyborem.",
 		"- Gdy przy akcji gracza pojawi się nawias [MECHANIKA GRY — WYNIK RZUTU: …], to gra rozstrzygnęła próbę kością i atrybutami postaci. Ten wynik jest wiążący: opisz jego skutki wiernie, nawet gdy oznacza porażkę bohatera. Nigdy nie ujawniaj w narracji liczb ani samego istnienia rzutu.",
@@ -202,26 +212,55 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 		int(attrs.get("intelekt", 5)), int(attrs.get("charyzma", 5)),
 		int(character.get("hp", 100)), int(character.get("hp_max", 100)),
 		("; Mana %d/%d" % [int(character.get("mana", 0)), int(character.get("mana_max", 0))]) if has_mana else ""])
+	if str(Game.summary).strip_edges() != "":
+		lines.append("")
+		lines.append("CO BYŁO DO TEJ PORY: %s" % Game.summary)
+
+	# Kanon nazw. Model gubi nazwy własne, gdy widzi je tylko w odległej
+	# historii — tutaj dostaje je co turę, w jedynym poprawnym brzmieniu.
+	var canon: Array = []
 	if not Game.npcs.is_empty():
 		var known: Array = []
-		for n in Game.npcs.slice(0, 12):
-			known.append("%s (%s)" % [n.get("imie", ""), n.get("relacja", "")])
-		lines.append("POZNANE POSTACIE: %s." % "; ".join(known))
+		for n in Game.npcs.slice(0, 14):
+			var who := str(n.get("imie", ""))
+			var role := str(n.get("rola", "")).strip_edges()
+			var rel := str(n.get("relacja", "")).strip_edges()
+			if role != "":
+				who += " — " + role
+			if rel != "":
+				who += " (" + rel + ")"
+			known.append(who)
+		canon.append("· Postacie: " + "; ".join(known))
 	if not Game.locations.is_empty():
 		var locs: Array = []
 		for l in Game.locations:
 			locs.append(str(l.get("name", "")))
-		lines.append("ZNANE MIEJSCA: %s." % ", ".join(locs))
-	if not Game.quests.is_empty():
-		var qs: Array = []
-		for q in Game.quests:
+		canon.append("· Miejsca: " + "; ".join(locs))
+	if not Game.discoveries.is_empty():
+		var ds: Array = []
+		for d in Game.discoveries.slice(0, 14):
+			ds.append(str(d.get("title", "")))
+		canon.append("· Przedmioty i odkrycia: " + "; ".join(ds))
+	var qs: Array = []
+	for q in Game.quests:
+		if str(q.get("status", "")).to_lower() != "zamknięty":
 			qs.append(str(q.get("title", "")))
-		lines.append("OTWARTE WĄTKI: %s." % ", ".join(qs))
+	if not qs.is_empty():
+		canon.append("· Otwarte wątki: " + "; ".join(qs))
+	if not canon.is_empty():
+		lines.append("")
+		lines.append("KANON — jedyne poprawne brzmienia nazw. Przepisuj je dokładnie tak, jak stoją poniżej (wolno odmieniać przez przypadki). Nie zmieniaj ich, nie wymyślaj wariantów i nie zapominaj o tych osobach:")
+		lines.append_array(canon)
 	lines.append("")
 	lines.append("FORMAT ODPOWIEDZI (bezwzględny): PIERWSZA linia każdej odpowiedzi to blok stanu — jedna linia czystego JSON, bez bloku kodu:")
-	lines.append('###STAN {"postacie":[{"imie":"Marta","plec":"kobieta","rola":"zielarka","relacja":"nieufna, ale zaciekawiona graczem"}],"hp":0,"mana":0,"pd":10,"podpowiedzi":["Zapytaj Martę o list","Rozejrzyj się po składzie","Wróć do gospody na wieczerzę"]}')
+	lines.append('###STAN {"streszczenie":"Marta, zielarka z Kazimierza Dolnego, przyznała, że list przyszedł ze składu przy Starym Trakcie. Gracz szuka nadawcy; Marta boi się, że ktoś ją obserwuje.","postacie":[{"imie":"Marta","plec":"kobieta","rola":"zielarka","relacja":"nieufna, ale zaciekawiona graczem"}],"miejsca":[{"nazwa":"Skład przy Starym Trakcie","opis":"pusty magazyn za miastem"}],"odkrycia":[{"nazwa":"List bez podpisu","rodzaj":"Trop"}],"watki":[{"tytul":"Kto wysłał list","stan":"otwarty"}],"hp":0,"mana":0,"pd":10,"podpowiedzi":["Zapytaj Martę o list","Rozejrzyj się po składzie","Wróć do gospody na wieczerzę"]}')
 	lines.append("Po niej pusta linia, a potem właściwa narracja. Gracz nie widzi bloku — nie wspominaj o nim w tekście.")
+	lines.append("- streszczenie: 2–3 zdania streszczające CAŁĄ opowieść od początku — kto, gdzie, co się wydarzyło i co jest teraz stawką. Pisz je od nowa w każdej turze, dopisując najnowsze wydarzenia. Po starszych scenach zostanie tylko to streszczenie, więc nie pomijaj w nim nazw własnych.")
 	lines.append("- postacie: WSZYSTKIE postacie niezależne obecne w tej scenie (także wspomniane wcześniej); w polu relacja krótko: aktualne uczucia i powiązania z graczem.")
+	lines.append("- miejsca: TYLKO miejsca, które pojawiły się albo zmieniły w tej turze — nazwa dokładnie tak, jak brzmi w opowieści, plus pół zdania opisu. Nie powtarzaj miejsc już znanych z KANONU.")
+	lines.append("- odkrycia: TYLKO przedmioty, tropy i informacje zdobyte w tej turze; rodzaj to „Przedmiot”, „Trop” albo „Wiedza”.")
+	lines.append("- watki: otwarte wątki fabularne — krótki tytuł i stan („otwarty” albo „zamknięty”). Wątek domknięty w tej turze oznacz jako zamknięty.")
+	lines.append("- Puste pola zostawiaj jako puste listy. Nie wymyślaj wpisów na siłę — Kronika ma zawierać wyłącznie to, co naprawdę padło w opowieści.")
 	lines.append("- hp: zmiana Zdrowia gracza w tej turze (ujemna przy obrażeniach; zwykle 0).")
 	lines.append("- mana: zmiana Many gracza (ujemna przy użyciu mocy%s)." % ("" if has_mana else "; w tym świecie zawsze 0"))
 	lines.append("- pd: punkty doświadczenia za tę turę — 5–15 za zwykłe działania, do 30 za brawurowe, sprytne lub przełomowe.")
@@ -262,7 +301,10 @@ func _build_messages(history: Array, roll := {}) -> Array:
 	for i in range(start, history.size()):
 		var e: Dictionary = history[i]
 		var role := "user" if e.get("role") == "player" else "assistant"
-		var text := str(e.get("text", "")).strip_edges()
+		# Odpowiedzi modelu odtwarzamy w oryginale, razem z blokiem ###STAN.
+		# Gdy widzi własne wpisy bez niego, przestaje go pisać — a przy okazji
+		# rozjeżdża mu się trzymanie każdej innej reguły formatu.
+		var text := str(e.get("raw", e.get("text", ""))).strip_edges()
 		if text != "":
 			messages.append({"role": role, "content": text})
 	# Wynik rzutu rozstrzyga grę, nie model — dokładamy go do ostatniej akcji.
@@ -291,7 +333,10 @@ func _claude_request(system: String, messages: Array) -> String:
 		return ""
 	var payload := {
 		"model": str(Game.settings.get("claude_model", "claude-opus-5")),
-		"max_tokens": 1536,
+		"max_tokens": 2048,
+		# Domyślna jedynka rozjeżdża nazwy własne i gubi ustalone fakty.
+		# Niżej model trzyma się kanonu, a wciąż pisze barwnie.
+		"temperature": 0.7,
 		"system": system,
 		"messages": messages,
 	}
@@ -331,6 +376,8 @@ func _claude_request(system: String, messages: Array) -> String:
 	if typeof(parsed) != TYPE_DICTIONARY:
 		emit_signal("ai_state", false, "Nieczytelna odpowiedź Claude API — tryb offline.")
 		return ""
+	if str(parsed.get("stop_reason", "")) == "max_tokens":
+		emit_signal("ai_state", false, "Odpowiedź Mistrza Gry urwała się na limicie długości.")
 	if str(parsed.get("stop_reason", "")) == "refusal":
 		emit_signal("ai_state", false, "Model odmówił odpowiedzi na tę akcję — tryb offline dla tej tury.")
 		return ""
@@ -425,7 +472,7 @@ func _ollama_request(system: String, messages: Array) -> String:
 		flat.append("%s: %s" % [who, m.get("content", "")])
 	var prompt := "%s\n\nDOTYCHCZAS:\n%s\n\nMISTRZ GRY:" % [system, "\n".join(flat)]
 	var payload := {"model": model, "prompt": prompt, "stream": false,
-		"options": {"temperature": 0.9}}
+		"options": {"temperature": 0.7}}
 	var err := _http.request(host.rstrip("/") + "/api/generate",
 		["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(payload))
 	if err != OK:

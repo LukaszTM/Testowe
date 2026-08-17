@@ -15,6 +15,7 @@ var discoveries: Array = []    # [{title, type, time}]
 var quests: Array = []         # [{title, note, status}]
 var npcs: Array = []           # [{imie, plec, rola, relacja, tura}] — biblioteka postaci
 var suggestions: Array = []    # podpowiedzi na bieżącą turę (od Mistrza Gry)
+var summary := ""              # streszczenie fabuły — pamięć długa, gdy stare tury wypadną z okna
 var save_path := ""            # plik tej kroniki (pusty = jeszcze niezapisana)
 
 const ATTR_KEYS := ["sila", "zrecznosc", "intelekt", "charyzma"]
@@ -157,6 +158,7 @@ func new_world() -> void:
 	world = {}
 	character = {}
 
+# Korutyna: w trybie Mistrza Gry czeka na pierwszą scenę. Wywołuj przez await.
 func begin_adventure() -> void:
 	# Ustala ziarno na podstawie świata — ta sama opowieść jest odtwarzalna.
 	var basis := "%s|%s|%s" % [world.get("name", ""), world.get("genre_key", ""), Time.get_unix_time_from_system()]
@@ -181,11 +183,37 @@ func begin_adventure() -> void:
 	character["dead"] = false
 	Saves.save_character(character)
 
+	summary = ""
 	var prof := profile()
-	# Startowy punkt zaczepienia w Kronice.
-	_add_location(prof["hub"])
-	var opening := Narrator.opening(world, character, prof, rng)
-	history.append({"role": "narrator", "text": opening})
+	# Startowy punkt zaczepienia w Kronice — nazwa z kreatora świata,
+	# a dopiero w jej braku szablon gatunku.
+	var start_loc := str(world.get("start_location", "")).strip_edges()
+	if start_loc != "":
+		_add_location({"name": start_loc, "note": "miejsce, w którym zaczyna się opowieść"})
+	else:
+		_add_location(prof["hub"])
+
+	# Pierwszą scenę pisze Mistrz Gry, jeśli jest włączony. Wcześniej dostawał
+	# tu proceduralny akapit jako „własną” wypowiedź i przez resztę rozgrywki
+	# ciągnął jego styl oraz fakty.
+	var opening := ""
+	var raw := ""
+	if Narrator.ai_enabled():
+		raw = await Narrator.ai_generate(world, character, history, {})
+		if raw != "":
+			var pr := Narrator.parse_state(raw)
+			opening = str(pr["text"])
+			var st: Dictionary = pr["state"]
+			_merge_npcs(st.get("postacie", []))
+			_set_suggestions(st.get("podpowiedzi", []))
+			_set_summary(st.get("streszczenie", ""))
+	if opening == "":
+		opening = Narrator.opening(world, character, prof, rng)
+		raw = ""
+	var first := {"role": "narrator", "text": opening}
+	if raw != "":
+		first["raw"] = raw
+	history.append(first)
 	emit_signal("chronicle_changed")
 
 # Wykonuje ruch gracza. Korutyna: w trybie AI czeka na model, w offline zwraca od razu.
@@ -206,23 +234,34 @@ func take_action(action: String) -> void:
 	if _should_roll(action):
 		roll = Narrator.roll_action(rng, _attr_modifier(action))
 
+	var raw := ""
 	if Narrator.ai_enabled():
 		# Akcja gracza jest już ostatnim wpisem historii.
-		text = await Narrator.ai_generate(world, character, history, roll)
-		if text != "":
-			var pr := Narrator.parse_state(text)
-			text = pr["text"]
+		raw = await Narrator.ai_generate(world, character, history, roll)
+		if raw != "":
+			var pr := Narrator.parse_state(raw)
+			text = str(pr["text"])
 			state = pr["state"]
 
 	if text == "":
 		# Tryb offline (także fallback, gdy AI zawiedzie).
 		text = Narrator.respond(world, character, prof, action, roll, rng)
+		raw = ""
 
 	var entry := {"role": "narrator", "text": text}
+	# Oryginał z blokiem stanu zostaje w kronice — model musi widzieć własne
+	# odpowiedzi dokładnie tak, jak je napisał, inaczej gubi format i fakty.
+	if raw != "":
+		entry["raw"] = raw
 	if not roll.is_empty():
 		entry["roll"] = roll
 	history.append(entry)
-	_update_memory(action, text)
+	# Kronikę wypełnia Mistrz Gry własnymi nazwami. Słownikowe zgadywanie
+	# („Klucz / kod dostępu”, „Kawiarnia”) zostaje tylko dla trybu offline —
+	# w trybie AI wstawiałoby do Kroniki atrapy zamiast prawdziwych faktów,
+	# a te wracałyby potem do modelu jako obowiązujący kanon nazw.
+	if state.is_empty():
+		_update_memory(action, text)
 	_apply_turn_effects(action, roll, state)
 	emit_signal("chronicle_changed")
 	# Autozapis co pięć tur — długiej rozgrywki nie wolno stracić.
@@ -244,6 +283,10 @@ func _apply_turn_effects(action: String, roll: Dictionary, state: Dictionary) ->
 		xp_gain = clampi(int(state.get("pd", 8)), 0, 40)
 		_merge_npcs(state.get("postacie", []))
 		_set_suggestions(state.get("podpowiedzi", []))
+		_set_summary(state.get("streszczenie", ""))
+		_merge_locations(state.get("miejsca", []))
+		_merge_discoveries(state.get("odkrycia", []))
+		_merge_quests(state.get("watki", []))
 	else:
 		# Tryb offline: proste reguły.
 		xp_gain = 8
@@ -308,6 +351,68 @@ func _check_death() -> void:
 	history.append({"role": "narrator", "text":
 		"Świat ciemnieje. %s osuwa się na ziemię — ta kronika dobiega końca. Możesz wrócić do menu i rozpocząć nową opowieść." % character.get("name", "Bohater")})
 	Saves.save_current()
+
+# Miejsca, odkrycia i wątki podane wprost przez Mistrza Gry — w brzmieniu,
+# którego naprawdę używa w opowieści.
+func _merge_locations(arr) -> void:
+	if typeof(arr) != TYPE_ARRAY:
+		return
+	for it in arr:
+		var nazwa := ""
+		var opis := ""
+		if typeof(it) == TYPE_DICTIONARY:
+			nazwa = str(it.get("nazwa", "")).strip_edges()
+			opis = str(it.get("opis", "")).strip_edges()
+		else:
+			nazwa = str(it).strip_edges()
+		if nazwa != "":
+			_add_location({"name": nazwa, "note": opis})
+
+func _merge_discoveries(arr) -> void:
+	if typeof(arr) != TYPE_ARRAY:
+		return
+	for it in arr:
+		var nazwa := ""
+		var rodzaj := "Trop"
+		if typeof(it) == TYPE_DICTIONARY:
+			nazwa = str(it.get("nazwa", "")).strip_edges()
+			rodzaj = str(it.get("rodzaj", "Trop")).strip_edges()
+		else:
+			nazwa = str(it).strip_edges()
+		if nazwa != "":
+			_add_discovery(nazwa, rodzaj if rodzaj != "" else "Trop")
+
+func _merge_quests(arr) -> void:
+	if typeof(arr) != TYPE_ARRAY:
+		return
+	for it in arr:
+		var tytul := ""
+		var stan := ""
+		if typeof(it) == TYPE_DICTIONARY:
+			tytul = str(it.get("tytul", "")).strip_edges()
+			stan = str(it.get("stan", "")).strip_edges().to_lower()
+		else:
+			tytul = str(it).strip_edges()
+		if tytul == "":
+			continue
+		var hit := false
+		for q in quests:
+			if str(q.get("title", "")).to_lower() == tytul.to_lower():
+				if stan != "":
+					q["status"] = stan
+				hit = true
+				break
+		if not hit:
+			_add_quest(tytul, "")
+			if stan != "" and not quests.is_empty():
+				quests[-1]["status"] = stan
+
+# Streszczenie fabuły pisane przez Mistrza Gry co turę. Gdy najstarsze sceny
+# wypadną z okna kontekstu, to jedyne, co po nich zostaje.
+func _set_summary(txt) -> void:
+	var t := str(txt).strip_edges()
+	if t != "":
+		summary = t.left(900)
 
 # Podpowiedzi na następną turę, przygotowane przez Mistrza Gry do bieżącej sceny.
 func _set_suggestions(arr) -> void:
@@ -390,19 +495,19 @@ func _add_location(loc: Dictionary) -> void:
 	if str(loc.get("name", "")) == "":
 		return
 	for x in locations:
-		if x["name"] == loc["name"]:
+		if str(x["name"]).to_lower() == str(loc["name"]).to_lower():
 			return
 	locations.append(loc.duplicate())
 
 func _add_discovery(title: String, kind: String) -> void:
 	for d in discoveries:
-		if d["title"] == title:
+		if str(d["title"]).to_lower() == title.to_lower():
 			return
 	discoveries.append({"title": title, "type": kind, "time": _clock()})
 
 func _add_quest(title: String, note: String) -> void:
 	for q in quests:
-		if q["title"] == title:
+		if str(q["title"]).to_lower() == title.to_lower():
 			return
 	quests.append({"title": title, "note": note, "status": "aktywne"})
 
@@ -447,6 +552,7 @@ func to_dict() -> Dictionary:
 		"quests": quests,
 		"npcs": npcs,
 		"suggestions": suggestions,
+		"summary": summary,
 		"turn": turn,
 		"seed": seed_value,
 	}
@@ -460,6 +566,7 @@ func from_dict(d: Dictionary) -> void:
 	quests = d.get("quests", [])
 	npcs = d.get("npcs", [])
 	suggestions = d.get("suggestions", [])
+	summary = str(d.get("summary", ""))
 	turn = int(d.get("turn", 0))
 	seed_value = int(d.get("seed", 0))
 	rng.seed = seed_value

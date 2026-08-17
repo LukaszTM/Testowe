@@ -11,6 +11,7 @@ var _arch_custom: LineEdit
 var _avatar_path := ""
 var _avatar_slot: HBoxContainer
 var _fd: FileDialog
+var _start_btn: Button
 
 const TRAITS := ["nieufny", "honorowy", "porywczy", "wyrachowany", "lojalny", "cyniczny",
 	"ciekawski", "opanowany", "brawurowy", "skryty", "uparty", "ironiczny"]
@@ -109,10 +110,10 @@ func _ready() -> void:
 	back.pressed.connect(func(): Game.router.goto("world"))
 	row.add_child(back)
 
-	var start := Ui.button("Rozpocznij opowieść", true)
-	start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	start.pressed.connect(_start)
-	row.add_child(start)
+	_start_btn = Ui.button("Rozpocznij opowieść", true)
+	_start_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_start_btn.pressed.connect(_start)
+	row.add_child(_start_btn)
 
 
 func _add(col: VBoxContainer, spec: Dictionary) -> Control:
@@ -250,5 +251,10 @@ func _start() -> void:
 	c["background"] = _f["background"].text.strip_edges()
 	c["avatar"] = _avatar_path
 	Game.character = c
-	Game.begin_adventure()
-	Game.router.goto("play")
+	# Pierwszą scenę pisze Mistrz Gry — to zapytanie do modelu, więc trwa chwilę.
+	if _start_btn:
+		_start_btn.disabled = true
+		_start_btn.text = "Mistrz Gry pisze pierwszą scenę…"
+	await Game.begin_adventure()
+	if is_instance_valid(self):
+		Game.router.goto("play")

@@ -1,33 +1,40 @@
-# Skrypty do przygotowania grafik interfejsu
+# Przygotowanie grafik interfejsu
 
-`assets/ui/*.png` nie są rysowane ręcznie — powstają automatycznie z dwóch
-makiet koncepcyjnych (`menu_full.png`, `game_full.png`, 1672×941). Makiety mają
-tekst wtopiony w piksele, więc do gry trzeba go najpierw usunąć.
+`assets/ui/*.png` powstają z paczki **Kronikarz Asset Pack Extended**
+(`backgrounds/`, `buttons/`, `frames/`, `bars/`, `controls/`, `ornaments/`).
+Grafiki z paczki są czyste — nie mają wtopionego tekstu — więc skrypt tylko je
+przycina, skaluje i dokłada to, czego w paczce nie ma.
 
-- `lib_wipe.py` — usuwanie napisów. Tło pod wymazanym prostokątem jest
-  odtwarzane przez dyfuzję koloru papieru z otoczenia, a ziarno i plamy
-  pergaminu doklejane z zweryfikowanych, czystych wycinków tej samej karty
-  (sklejanie z zakładką i losowym przesunięciem, żeby nie było widać
-  powtórzeń). `restore_ink` przywraca sam rysunek ornamentu na nowym papierze.
-  `cut_from_paper` wycina okucia przycisków z otaczającego pergaminu, licząc
-  alfę z odległości od koloru papieru. `drop_center_ornament` usuwa ozdobę ze
-  środka listwy, żeby ramkę dało się rozciągać jako 9-patch.
-- `build_ui.py` — właściwy przepis: co i gdzie wymazać, co przywrócić,
-  jak pociąć przyciski i paski.
+`build_ui.py` robi trzy rzeczy:
+
+1. **Przycina przezroczyste marginesy.** Okucia i ramy przychodzą w kadrach
+   2172×724 z szerokim pustym obramowaniem. Bez przycięcia marginesy 9-patcha
+   wypadłyby w pustce i przycisk rozjechałby się przy rozciąganiu.
+2. **Skaluje do rozmiarów użytkowych** (przestrzeń rysowania gry to 1672×941).
+   Pełne kadry ważą po 2 MB; w grze wystarczy 300–760 px szerokości.
+3. **Dorabia wypełnienia pasków.** Paczka daje samą ramę paska
+   (`bars/progress_bar_frame.png`). Skrypt znajduje w niej szczelinę — najdłuższy
+   ciągły ciemny odcinek w kolumnie przez środek — i generuje trzy wypełnienia
+   (zdrowie, mana, PD) dokładnie w jej obrysie, z zaokrąglonymi końcami.
+   Rama jest budowana w wysokości, w jakiej gra ją rysuje (46 px), więc
+   rozciąga się tylko w poziomie i ozdobne końcówki zostają nietknięte.
 
 ## Uruchomienie
 
 ```
 pip install Pillow numpy
-# obok skryptu potrzebny katalog gui_zip/Kronikarz_GUI_Godot/assets z makietami
-python3 build_ui.py          # wynik ląduje w ui_out/
+# obok skryptu katalog incoming/ z rozpakowaną paczką
+python3 build_ui.py       # wynik w ui_out3/
 ```
 
-Potem skopiuj `ui_out/*.png` do `assets/ui/`.
+Potem skopiuj `ui_out3/*.png` do `assets/ui/`.
 
 ## Podmiana na własne grafiki
 
-Jeśli zamówisz nowe ilustracje, nie musisz ruszać kodu — wystarczy podmienić
-pliki w `assets/ui/` przy zachowaniu nazw i proporcji. Współrzędne obszarów,
-w których gra rysuje żywe kontrolki, siedzą w `src/ui/Ui.gd` jako stałe `R_*`
-(w przestrzeni 1672×941).
+Nie trzeba ruszać kodu — wystarczy podmienić pliki w `assets/ui/` przy
+zachowaniu nazw i proporcji. Dwie rzeczy trzeba wtedy sprawdzić w `src/ui/Ui.gd`:
+
+- marginesy 9-patcha przy wywołaniach `_sbt(nazwa, mx, my, cx, cy)` —
+  `mx`/`my` to nierozciągane narożniki grafiki, `cx`/`cy` to miejsce na napis;
+- stałe `M_*` i `P_*` — obszary, w których gra rysuje kontrolki na tle
+  (współrzędne w przestrzeni 1672×941).

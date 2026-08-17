@@ -37,7 +37,7 @@ func _ready() -> void:
 		"# Archetyp",
 		"Nie ogranicza Cię — to punkt wyjścia, który Mistrz Gry weźmie pod uwagę w pierwszej scenie.",
 	]))
-	var c := Ui.scroll_column(Ui.R_PAGE_L, 14)
+	var c := Ui.scroll_column(Ui.M_BODY, 14)
 	add_child(c["host"])
 	var col: VBoxContainer = c["box"]
 

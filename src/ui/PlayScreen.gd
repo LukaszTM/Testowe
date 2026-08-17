@@ -11,7 +11,9 @@ var _send: Button
 var _hints_lbl: Control
 var _hints_row: HBoxContainer
 var _hints_host: Control
-var _chronicle: VBoxContainer
+var _hero: VBoxContainer
+var _attrs: VBoxContainer
+var _npcs: VBoxContainer
 var _status: Label
 var _title: Label
 var _busy := false
@@ -30,21 +32,21 @@ func _ready() -> void:
 # ——— Lewa karta: tytuł, narracja, podpowiedzi, pole polecenia ————————
 
 func _build_left() -> void:
-	var th := Ui.region(Ui.R_TITLE)
+	var th := Ui.region(Ui.P_TITLE)
 	add_child(th)
 	var trow := HBoxContainer.new()
 	trow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	trow.add_theme_constant_override("separation", 12)
 	th.add_child(trow)
-	_title = Ui.title(str(Game.world.get("name", "Kronika")), 30)
+	_title = Ui.title(str(Game.world.get("name", "Kronika")), 28)
 	_title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	trow.add_child(_title)
-	var tag := Ui.subtle("· %s" % Game.world.get("genre_label", ""), 16)
+	var tag := Ui.subtle("· %s" % Game.world.get("genre_label", ""), 15)
 	tag.autowrap_mode = TextServer.AUTOWRAP_OFF
 	tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	trow.add_child(tag)
 
-	var host := Ui.region(Ui.R_PAGE_L)
+	var host := Ui.region(Ui.P_STORY)
 	add_child(host)
 	var sc := ScrollContainer.new()
 	sc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -60,7 +62,7 @@ func _build_left() -> void:
 	_log.add_theme_constant_override("line_separation", 8)
 	sc.add_child(_log)
 
-	_hints_lbl = Ui.region(Ui.R_HINTS_LBL)
+	_hints_lbl = Ui.region(Ui.P_HINTS_L)
 	add_child(_hints_lbl)
 	var hl := Ui.subtle("PODPOWIEDZI", 13)
 	hl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -69,14 +71,14 @@ func _build_left() -> void:
 	hl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_hints_lbl.add_child(hl)
 
-	_hints_host = Ui.region(Ui.R_HINTS)
+	_hints_host = Ui.region(Ui.P_HINTS)
 	add_child(_hints_host)
 	_hints_row = HBoxContainer.new()
 	_hints_row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_hints_row.add_theme_constant_override("separation", 10)
+	_hints_row.add_theme_constant_override("separation", 8)
 	_hints_host.add_child(_hints_row)
 
-	_input_host = Ui.region(Ui.R_INPUT)
+	_input_host = Ui.region(Ui.P_INPUT)
 	add_child(_input_host)
 	_input = TextEdit.new()
 	_input.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -87,54 +89,57 @@ func _build_left() -> void:
 	_input.gui_input.connect(_input_gui)
 	_input_host.add_child(_input)
 
-	var eh := Ui.region(Ui.R_EXEC)
+	var eh := Ui.region(Ui.P_EXEC)
 	add_child(eh)
 	_send = Ui.small_button("Wykonaj", true)
 	_send.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_send.add_theme_font_size_override("font_size", Ui.fs(21))
+	_send.add_theme_font_size_override("font_size", Ui.fs(19))
 	_send.pressed.connect(func(): _submit(_input.text))
 	eh.add_child(_send)
 
-# ——— Prawa karta: stan Mistrza Gry, przyciski, Kronika ————————————
+# ——— Prawa karta: cztery gotowe pola księgi ————————————————————
 
 func _build_right() -> void:
-	var sh := Ui.region(Ui.R_STATUS)
-	add_child(sh)
+	var b1 := Ui.box(Ui.P_BOX1, "", 6)
+	add_child(b1["host"])
+	_hero = b1["box"]
+
+	var b2 := Ui.box(Ui.P_BOX2, "Atrybuty", 4)
+	add_child(b2["host"])
+	_attrs = b2["box"]
+
+	var b3 := Ui.box(Ui.P_BOX3, "Postacie", 5)
+	add_child(b3["host"])
+	_npcs = b3["box"]
+
+	var b4 := Ui.region(Ui.P_BOX4)
+	add_child(b4)
+	var col := VBoxContainer.new()
+	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	col.add_theme_constant_override("separation", 6)
+	b4.add_child(col)
+
 	_status = Ui.subtle(_mode_note(), 14)
-	_status.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_status.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_status.clip_text = true
-	sh.add_child(_status)
+	col.add_child(_status)
 
-	var ah := Ui.region(Ui.R_BTN_A)
-	add_child(ah)
-	var save := Ui.small_button("Zapisz")
-	save.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	save.pressed.connect(_on_save)
-	ah.add_child(save)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(row)
+	for spec in [["Kronika", _show_chronicle], ["Zapisz", _on_save], ["Menu", _on_menu]]:
+		var btn := Ui.small_button(str(spec[0]))
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.custom_minimum_size = Vector2(0, 50)
+		btn.add_theme_font_size_override("font_size", Ui.fs(17))
+		btn.pressed.connect(spec[1] as Callable)
+		row.add_child(btn)
 
-	var bh := Ui.region(Ui.R_BTN_B)
-	add_child(bh)
-	var menu := Ui.small_button("Menu")
-	menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+func _on_menu() -> void:
 	# Wyjście do menu zapisuje kronikę — nic nie przepada.
-	menu.pressed.connect(func():
-		Saves.save_current()
-		Game.router.goto("menu"))
-	bh.add_child(menu)
-
-	var host := Ui.region(Ui.R_PAGE_R)
-	add_child(host)
-	var sc := ScrollContainer.new()
-	sc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	host.add_child(sc)
-	_chronicle = VBoxContainer.new()
-	_chronicle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_chronicle.add_theme_constant_override("separation", 9)
-	sc.add_child(_chronicle)
+	Saves.save_current()
+	Game.router.goto("menu")
 
 # ——— Pole polecenia ————————————————————————————————————————
 
@@ -144,8 +149,8 @@ func _resize_input() -> void:
 	for i in range(_input.get_line_count()):
 		visual += _input.get_line_wrap_count(i) + 1
 	var lines := clampi(visual, 1, 3)
-	var h: float = Ui.R_INPUT.size.y + float(lines - 1) * 26.0
-	var bottom: float = Ui.R_INPUT.position.y + Ui.R_INPUT.size.y
+	var h: float = Ui.P_INPUT.size.y + float(lines - 1) * 26.0
+	var bottom: float = Ui.P_INPUT.position.y + Ui.P_INPUT.size.y
 	_input_host.offset_top = bottom - h
 	var roomy := lines == 1
 	_hints_host.visible = roomy and _hints_row.get_child_count() > 0
@@ -249,80 +254,137 @@ func _refresh() -> void:
 		_status.text = "Kronika dobiegła końca"
 
 func _render_chronicle() -> void:
-	for c in _chronicle.get_children():
-		c.queue_free()
-
-	_chronicle.add_child(Ui.heading("Kronika", 20))
-	_chronicle.add_child(Ui.subtle("Tura %d" % Game.turn, 13))
-	_chronicle.add_child(Ui.hsep())
-
-	_render_hero_card()
+	_render_hero()
+	_render_attrs()
 	_render_npcs()
 
-	_section("MIEJSCA", Game.locations, func(x): return x["name"], func(x): return x.get("note", ""))
-	_section("ODKRYCIA", Game.discoveries, func(x): return x["title"], func(x): return x.get("type", ""))
-	_section("WĄTKI", Game.quests, func(x): return x["title"], func(x): return x.get("note", ""))
+# ——— Pole 1: bohater ————————————————————————————————————————
 
-# ——— Karta bohatera: avatar, zdrowie, mana, poziom, atrybuty ————————
-
-func _render_hero_card() -> void:
-	var c := Game.character
+func _render_hero() -> void:
+	for c in _hero.get_children():
+		c.queue_free()
+	var ch := Game.character
 	Game.ensure_character_stats()
 
 	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 10)
-	_chronicle.add_child(head)
-	head.add_child(Ui.avatar_or_medallion(c, 52))
+	head.add_theme_constant_override("separation", 12)
+	_hero.add_child(head)
+	head.add_child(Ui.avatar_or_medallion(ch, 56))
 	var hv := VBoxContainer.new()
 	hv.add_theme_constant_override("separation", 2)
 	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hv.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	head.add_child(hv)
-	hv.add_child(Ui.heading(str(c.get("name", "?")), 18))
-	hv.add_child(Ui.subtle("Poziom %d · %s" % [int(c.get("level", 1)), c.get("archetype", "")], 13))
+	hv.add_child(Ui.heading(str(ch.get("name", "?")), 20))
+	hv.add_child(Ui.subtle("Poziom %d · %s · tura %d" % [
+		int(ch.get("level", 1)), ch.get("archetype", ""), Game.turn], 13))
 
-	_stat_row("Zdrowie", int(c.get("hp", 0)), int(c.get("hp_max", 100)), Ui.OXIDE)
-	if int(c.get("mana_max", 0)) > 0:
-		_stat_row("Mana", int(c.get("mana", 0)), int(c.get("mana_max", 0)), Ui.AZURE)
-	_stat_row("PD", int(c.get("xp", 0)), 100 * int(c.get("level", 1)), Ui.GOLD_DIM)
+	_stat_row(_hero, "Zdrowie", int(ch.get("hp", 0)), int(ch.get("hp_max", 100)), Ui.OXIDE)
+	if int(ch.get("mana_max", 0)) > 0:
+		_stat_row(_hero, "Mana", int(ch.get("mana", 0)), int(ch.get("mana_max", 0)), Ui.AZURE)
+	_stat_row(_hero, "PD", int(ch.get("xp", 0)), 100 * int(ch.get("level", 1)), Ui.GOLD_DIM)
 
-	var pts := int(c.get("attr_points", 0))
-	var attrs: Dictionary = c.get("attrs", {})
+# Etykieta obok paska, nie nad nim — w polu bohatera liczy się każdy piksel.
+func _stat_row(host: VBoxContainer, label: String, val: int, maxv: int, color: Color) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	host.add_child(row)
+	var l := Ui.subtle("%s %d/%d" % [label, val, maxv], 13)
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	l.custom_minimum_size = Vector2(124, 0)
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(l)
+	var bar := Ui.stat_bar(color)
+	bar.max_value = maxi(1, maxv)
+	bar.value = val
+	row.add_child(bar)
+
+# ——— Pole 2: atrybuty ————————————————————————————————————————
+
+func _render_attrs() -> void:
+	for c in _attrs.get_children():
+		if c is Label and (c as Label).text == "ATRYBUTY":
+			continue
+		c.queue_free()
+	var ch := Game.character
+	var pts := int(ch.get("attr_points", 0))
+	var attrs: Dictionary = ch.get("attrs", {})
 	if pts > 0:
-		_chronicle.add_child(Ui.subtle("PUNKTY ATRYBUTÓW: %d — rozdaj je!" % pts, 12))
+		var hint := Ui.subtle("masz %d pkt do rozdania" % pts, 12)
+		hint.add_theme_color_override("font_color", Ui.GOLD)
+		_attrs.add_child(hint)
 	for k in Game.ATTR_KEYS:
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
-		_chronicle.add_child(row)
-		var lbl := Ui.subtle("%s: %d" % [Game.ATTR_LABELS[k], int(attrs.get(k, 5))], 13)
+		row.add_theme_constant_override("separation", 6)
+		_attrs.add_child(row)
+		var lbl := Ui.body("%s: %d" % [Game.ATTR_LABELS[k], int(attrs.get(k, 5))])
 		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(lbl)
 		if pts > 0:
 			var plus := Ui.small_button("+")
-			plus.custom_minimum_size = Vector2(48, 40)
-			plus.add_theme_font_size_override("font_size", Ui.fs(18))
+			plus.custom_minimum_size = Vector2(52, 40)
+			plus.add_theme_font_size_override("font_size", Ui.fs(17))
 			plus.pressed.connect(Game.spend_attr.bind(k))
 			row.add_child(plus)
-	_chronicle.add_child(Ui.hsep())
 
-func _stat_row(label: String, val: int, maxv: int, color: Color) -> void:
-	var cap := Ui.subtle("%s %d/%d" % [label, val, maxv], 12)
-	_chronicle.add_child(cap)
-	var bar := Ui.stat_bar(color)
-	bar.max_value = maxv
-	bar.value = val
-	_chronicle.add_child(bar)
+# ——— Kronika: miejsca, odkrycia, wątki — na wysuwanej karcie ————————
+
+func _show_chronicle() -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.62)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var card := Ui.frame_card(20)
+	card.custom_minimum_size = Vector2(760, 620)
+	center.add_child(card)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	card.add_child(col)
+	col.add_child(Ui.heading("Kronika · tura %d" % Game.turn, 26))
+	col.add_child(Ui.flourish())
+
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(sc)
+	var inner := VBoxContainer.new()
+	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	inner.add_theme_constant_override("separation", 6)
+	sc.add_child(inner)
+
+	_section(inner, "MIEJSCA", Game.locations,
+		func(x): return x["name"], func(x): return x.get("note", ""))
+	_section(inner, "ODKRYCIA", Game.discoveries,
+		func(x): return x["title"], func(x): return x.get("type", ""))
+	_section(inner, "WĄTKI", Game.quests,
+		func(x): return x["title"], func(x): return x.get("note", ""))
+
+	var close := Ui.small_button("Zamknij")
+	close.pressed.connect(func(): overlay.queue_free())
+	col.add_child(close)
+	overlay.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and ev.pressed:
+			overlay.queue_free())
 
 # ——— Biblioteka postaci niezależnych ————————————————————————
 
 func _render_npcs() -> void:
-	_chronicle.add_child(Ui.subtle("POSTACIE", 12))
+	for c in _npcs.get_children():
+		if c is Label and (c as Label).text == "POSTACIE":
+			continue
+		c.queue_free()
 	if Game.npcs.is_empty():
-		_chronicle.add_child(Ui.subtle("— jeszcze nikogo nie poznałeś —", 13))
+		_npcs.add_child(Ui.subtle("— jeszcze nikogo nie poznałeś —", 13))
 	else:
 		for n in Game.npcs:
-			_chronicle.add_child(_npc_tile(n))
-	_chronicle.add_child(Ui.hsep())
+			_npcs.add_child(_npc_tile(n))
 
 # Klikalny kafelek postaci — otwiera jej kartę.
 func _npc_tile(n: Dictionary) -> Control:
@@ -343,7 +405,7 @@ func _npc_tile(n: Dictionary) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	tile.add_child(row)
-	var med := Ui.medallion(str(n.get("imie", "?")), 28)
+	var med := Ui.medallion(str(n.get("imie", "?")), 26)
 	med.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(med)
 	var v := VBoxContainer.new()
@@ -376,8 +438,8 @@ func _show_npc_card(n: Dictionary) -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(center)
 
-	var card := _paper_card(26)
-	card.custom_minimum_size = Vector2(520, 0)
+	var card := Ui.frame_card(18)
+	card.custom_minimum_size = Vector2(620, 460)
 	center.add_child(card)
 
 	var col := VBoxContainer.new()
@@ -417,20 +479,18 @@ func _show_npc_card(n: Dictionary) -> void:
 		if ev is InputEventMouseButton and ev.pressed:
 			overlay.queue_free())
 
-func _section(title: String, items: Array, name_fn: Callable, note_fn: Callable) -> void:
-	_chronicle.add_child(Ui.subtle(title, 12))
+func _section(host: VBoxContainer, title: String, items: Array,
+		name_fn: Callable, note_fn: Callable) -> void:
+	host.add_child(Ui.subtle(title, 13))
 	if items.is_empty():
-		_chronicle.add_child(Ui.subtle("— jeszcze pusto —", 13))
+		host.add_child(Ui.subtle("— jeszcze pusto —", 13))
 	else:
 		for it in items:
-			var entry_name := str(name_fn.call(it))
-			var line := Ui.body("• " + entry_name)
-			_chronicle.add_child(line)
+			host.add_child(Ui.body("• " + str(name_fn.call(it))))
 			var note := str(note_fn.call(it))
 			if note != "":
-				var n := Ui.subtle("   " + note, 12)
-				_chronicle.add_child(n)
-	_chronicle.add_child(Ui.hsep())
+				host.add_child(Ui.subtle("   " + note, 12))
+	host.add_child(Ui.hsep())
 
 func _on_save() -> void:
 	Saves.save_current()
@@ -450,20 +510,3 @@ func _mode_note() -> String:
 		"ollama":
 			return "Mistrz Gry: %s (lokalnie)" % Game.settings.get("ai_model", "")
 	return "Tryb offline · narracja proceduralna"
-
-# Karta na ciemnej nakładce potrzebuje własnego kawałka pergaminu.
-func _paper_card(pad := 24) -> PanelContainer:
-	var p := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Ui.PANEL
-	sb.set_corner_radius_all(5)
-	sb.set_border_width_all(3)
-	sb.border_color = Ui.GOLD
-	sb.shadow_size = 18
-	sb.shadow_color = Color(0, 0, 0, 0.5)
-	sb.content_margin_left = pad
-	sb.content_margin_right = pad
-	sb.content_margin_top = pad
-	sb.content_margin_bottom = pad
-	p.add_theme_stylebox_override("panel", sb)
-	return p

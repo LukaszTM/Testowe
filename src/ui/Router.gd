@@ -10,11 +10,11 @@ var _stage: Control
 # Który ekran korzysta z której płyty.
 const PLATES := {
 	"menu": "plate_menu",
-	"world": "plate_play",
-	"character": "plate_play",
+	"world": "plate_menu",
+	"character": "plate_menu",
 	"play": "plate_play",
-	"load": "plate_play",
-	"settings": "plate_play",
+	"load": "plate_menu",
+	"settings": "plate_menu",
 }
 
 func _ready() -> void:

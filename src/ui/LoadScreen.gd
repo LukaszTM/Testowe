@@ -13,7 +13,7 @@ func _ready() -> void:
 		"",
 		"Pliki leżą w katalogu danych gry, w podfolderze „zapisy”.",
 	]))
-	var c := Ui.scroll_column(Ui.R_PAGE_L, 12)
+	var c := Ui.scroll_column(Ui.M_BODY, 12)
 	add_child(c["host"])
 	var col: VBoxContainer = c["box"]
 

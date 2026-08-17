@@ -12,7 +12,7 @@ var _ollama_rows: VBoxContainer
 var _dice: OptionButton
 var _res: OptionButton
 var _winmode: OptionButton
-var _sfx: CheckButton
+var _sfx: CheckBox
 var _scale: HSlider
 var _scale_val: Label
 
@@ -35,7 +35,7 @@ func _ready() -> void:
 		"# Klucz API",
 		"Zapisuje się tylko na tym komputerze, w pliku ustawień.",
 	]))
-	var c := Ui.scroll_column(Ui.R_PAGE_L, 12)
+	var c := Ui.scroll_column(Ui.M_BODY, 12)
 	add_child(c["host"])
 	var col: VBoxContainer = c["box"]
 
@@ -66,9 +66,7 @@ func _ready() -> void:
 
 	# ——— Dźwięk ———
 	col.add_child(Ui.heading("Dźwięk", 19))
-	_sfx = CheckButton.new()
-	_sfx.text = "Dźwięki przycisków"
-	_sfx.button_pressed = bool(Game.settings.get("sfx_on", true))
+	_sfx = Ui.toggle("Dźwięki przycisków", bool(Game.settings.get("sfx_on", true)))
 	col.add_child(_sfx)
 
 	col.add_child(Ui.hsep())

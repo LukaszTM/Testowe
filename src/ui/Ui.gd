@@ -9,19 +9,29 @@ extends RefCounted
 
 const REF := Vector2(1672, 941)
 
-# ——— Obszary na kartach księgi (współrzędne odniesienia) ———————————
-const R_TITLE     := Rect2(150, 44, 384, 56)     # tytuł na lewej karcie
-const R_PAGE_L    := Rect2(224, 128, 732, 562)   # treść lewej karty
-const R_HINTS_LBL := Rect2(516, 708, 210, 28)    # napis „PODPOWIEDZI”
-const R_HINTS     := Rect2(146, 730, 894, 74)    # rząd podpowiedzi
-const R_INPUT     := Rect2(146, 802, 700, 78)    # pole polecenia
-const R_EXEC      := Rect2(858, 804, 184, 74)    # przycisk „Wykonaj”
-const R_ACTIONS   := Rect2(160, 742, 866, 130)   # listwa akcji (ekrany formularzy)
-const R_STATUS    := Rect2(1140, 50, 154, 44)    # stan po prawej u góry
-const R_BTN_A     := Rect2(1292, 44, 154, 68)    # pierwszy przycisk narożny
-const R_BTN_B     := Rect2(1448, 44, 154, 68)    # drugi przycisk narożny
-const R_PAGE_R    := Rect2(1164, 132, 396, 736)  # treść prawej karty
-const R_MENU      := Rect2(918, 172, 456, 520)   # kolumna przycisków w menu
+# ——— Obszary na płycie „menu” (menu i ekrany formularzy) ——————————
+# Lewa karta ma u góry różę wiatrów, u dołu panoramę miasta — tekst siada
+# pomiędzy nimi. Prawa karta jest pusta.
+const M_TITLE   := Rect2(228, 288, 548, 150)   # kaligraficzny tytuł gry
+const M_MOTTO   := Rect2(228, 448, 548, 64)    # dewiza pod tytułem
+const M_BUTTONS := Rect2(900, 186, 456, 508)   # kolumna przycisków menu
+const M_HEAD    := Rect2(230, 104, 546, 52)    # nagłówek ekranu
+const M_BODY    := Rect2(228, 168, 546, 534)   # treść formularza
+const M_ACTIONS := Rect2(228, 712, 546, 72)    # listwa akcji
+const M_HINTS   := Rect2(890, 150, 470, 560)   # objaśnienia na prawej karcie
+
+# ——— Obszary na płycie „rozgrywka” ————————————————————————————
+# Lewa karta to jedna duża rama; prawa ma cztery gotowe pola.
+const P_TITLE   := Rect2(220, 98, 566, 46)     # nazwa świata
+const P_STORY   := Rect2(220, 152, 566, 408)   # narracja
+const P_HINTS_L := Rect2(220, 570, 566, 24)    # napis „PODPOWIEDZI”
+const P_HINTS   := Rect2(220, 598, 566, 64)    # trzy podpowiedzi
+const P_INPUT   := Rect2(220, 674, 408, 76)    # pole polecenia
+const P_EXEC    := Rect2(638, 674, 148, 76)    # przycisk „Wykonaj”
+const P_BOX1    := Rect2(910, 118, 506, 208)   # bohater
+const P_BOX2    := Rect2(906, 442, 222, 148)   # atrybuty
+const P_BOX3    := Rect2(1190, 442, 230, 148)  # postacie
+const P_BOX4    := Rect2(906, 654, 516, 110)   # stan i przyciski
 
 # ——— Paleta zdjęta z grafik ————————————————————————————————
 const INK         := Color("3b2c1c")   # tekst na pergaminie
@@ -118,21 +128,24 @@ static func scroll_column(r: Rect2, sep := 12) -> Dictionary:
 
 # ——— Style z grafik ————————————————————————————————————————
 
-static func _sbt(name: String, mx: int, my: int, pad_x: int, pad_y: int,
+# mx/my — marginesy 9-patcha (nierozciągane narożniki grafiki),
+# cx/cy — ile miejsca zostawić na napis. To dwie różne rzeczy: ozdobne końcówki
+# okucia mogą sięgać dalej niż obszar, w którym tekst i tak wygląda dobrze.
+static func _sbt(name: String, mx: int, my: int, cx: int, cy: int,
 		tint := Color.WHITE) -> StyleBox:
 	var t := art(name)
 	if t == null:
-		return _sb(WOOD, 6, 2, GOLD, pad_x)
+		return _sb(WOOD, 6, 2, GOLD, cx)
 	var sb := StyleBoxTexture.new()
 	sb.texture = t
 	sb.texture_margin_left = mx
 	sb.texture_margin_right = mx
 	sb.texture_margin_top = my
 	sb.texture_margin_bottom = my
-	sb.content_margin_left = mx + pad_x
-	sb.content_margin_right = mx + pad_x
-	sb.content_margin_top = pad_y
-	sb.content_margin_bottom = pad_y
+	sb.content_margin_left = cx
+	sb.content_margin_right = cx
+	sb.content_margin_top = cy
+	sb.content_margin_bottom = cy
 	sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
 	sb.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
 	sb.modulate_color = tint
@@ -151,8 +164,10 @@ static func _sb(fill: Color, radius := 6, border := 0, border_col := LINE, pad :
 		sb.border_color = border_col
 	return sb
 
-const HOVER := Color(1.14, 1.08, 0.92, 1.0)
-const PRESS := Color(0.74, 0.65, 0.52, 1.0)
+const HOVER      := Color(1.12, 1.07, 0.95, 1.0)
+const PRESS      := Color(0.76, 0.70, 0.60, 1.0)
+const PRIMARY    := Color(1.16, 1.02, 0.66, 1.0)   # cieplejsze, „złote” okucie
+const PRIMARY_HI := Color(1.30, 1.14, 0.74, 1.0)
 
 # ——— Motyw ————————————————————————————————————————————————
 
@@ -168,10 +183,10 @@ static func build_theme() -> Theme:
 	t.set_font_size("font_size", "Label", base)
 
 	# Przycisk = okucie z grafiki (9-patch), napis rysuje Godot.
-	t.set_stylebox("normal", "Button", _sbt("btn_wide", 56, 26, 4, 10))
-	t.set_stylebox("hover", "Button", _sbt("btn_wide", 56, 26, 4, 10, HOVER))
-	t.set_stylebox("pressed", "Button", _sbt("btn_wide", 56, 26, 4, 10, PRESS))
-	t.set_stylebox("disabled", "Button", _sbt("btn_wide", 56, 26, 4, 10, Color(0.62, 0.58, 0.52, 0.75)))
+	t.set_stylebox("normal", "Button", _sbt("btn_wide", 92, 33, 46, 14))
+	t.set_stylebox("hover", "Button", _sbt("btn_wide_hover", 92, 33, 46, 14))
+	t.set_stylebox("pressed", "Button", _sbt("btn_wide_down", 92, 33, 46, 14))
+	t.set_stylebox("disabled", "Button", _sbt("btn_wide_off", 92, 33, 46, 14))
 	t.set_stylebox("focus", "Button", StyleBoxEmpty.new())
 	t.set_color("font_color", "Button", PARCH_TEXT)
 	t.set_color("font_hover_color", "Button", Color("fbeec6"))
@@ -183,18 +198,18 @@ static func build_theme() -> Theme:
 
 	# Pola tekstowe = wgłębiona listwa z grafiki.
 	for tp in ["LineEdit", "TextEdit"]:
-		t.set_stylebox("normal", tp, _sbt("field", 44, 22, 2, 6))
-		t.set_stylebox("focus", tp, _sbt("field", 44, 22, 2, 6, Color(1.16, 1.10, 0.94, 1.0)))
+		t.set_stylebox("normal", tp, _sbt("field", 92, 22, 26, 10))
+		t.set_stylebox("focus", tp, _sbt("field", 92, 22, 26, 10, Color(1.18, 1.12, 0.96, 1.0)))
 		t.set_color("font_color", tp, Color("efe2c0"))
 		t.set_color("font_placeholder_color", tp, Color("a08f70"))
 		t.set_color("caret_color", tp, GOLD_BRIGHT)
 		t.set_color("selection_color", tp, Color(0.55, 0.45, 0.20, 0.5))
 		t.set_font_size("font_size", tp, base)
-	t.set_stylebox("read_only", "LineEdit", _sbt("field", 44, 22, 2, 6))
+	t.set_stylebox("read_only", "LineEdit", _sbt("field", 92, 22, 26, 10))
 
-	t.set_stylebox("normal", "OptionButton", _sbt("field", 44, 22, 2, 6))
-	t.set_stylebox("hover", "OptionButton", _sbt("field", 44, 22, 2, 6, HOVER))
-	t.set_stylebox("pressed", "OptionButton", _sbt("field", 44, 22, 2, 6, PRESS))
+	t.set_stylebox("normal", "OptionButton", _sbt("field", 92, 22, 26, 10))
+	t.set_stylebox("hover", "OptionButton", _sbt("field", 92, 22, 26, 10, HOVER))
+	t.set_stylebox("pressed", "OptionButton", _sbt("field", 92, 22, 26, 10, PRESS))
 	t.set_stylebox("focus", "OptionButton", StyleBoxEmpty.new())
 	t.set_color("font_color", "OptionButton", Color("efe2c0"))
 	t.set_color("font_hover_color", "OptionButton", Color("fbeec6"))
@@ -283,11 +298,10 @@ static func body(txt: String) -> Label:
 static func button(txt: String, primary := false) -> Button:
 	var b := Button.new()
 	b.text = txt
-	b.custom_minimum_size = Vector2(0, 62)
+	b.custom_minimum_size = Vector2(0, 68)
 	if primary:
-		b.add_theme_stylebox_override("normal", _sbt("btn_wide_gold", 60, 30, 4, 10))
-		b.add_theme_stylebox_override("hover", _sbt("btn_wide_gold", 60, 30, 4, 10, HOVER))
-		b.add_theme_stylebox_override("pressed", _sbt("btn_wide_gold", 60, 30, 4, 10, PRESS))
+		b.add_theme_stylebox_override("normal", _sbt("btn_wide", 92, 33, 46, 14, PRIMARY))
+		b.add_theme_stylebox_override("hover", _sbt("btn_wide_hover", 92, 33, 46, 14, PRIMARY_HI))
 		b.add_theme_color_override("font_color", Color("fff4d2"))
 		b.add_theme_color_override("font_hover_color", Color.WHITE)
 	b.pressed.connect(func(): Audio.click())
@@ -297,11 +311,11 @@ static func button(txt: String, primary := false) -> Button:
 static func small_button(txt: String, primary := false) -> Button:
 	var b := Button.new()
 	b.text = txt
-	b.custom_minimum_size = Vector2(0, 44)
-	var plate := "btn_small_gold" if primary else "btn_small"
-	b.add_theme_stylebox_override("normal", _sbt(plate, 26, 17, 2, 4))
-	b.add_theme_stylebox_override("hover", _sbt(plate, 26, 17, 2, 4, HOVER))
-	b.add_theme_stylebox_override("pressed", _sbt(plate, 26, 17, 2, 4, PRESS))
+	b.custom_minimum_size = Vector2(0, 52)
+	var tint := PRIMARY if primary else Color.WHITE
+	b.add_theme_stylebox_override("normal", _sbt("btn_small", 46, 22, 24, 8, tint))
+	b.add_theme_stylebox_override("hover", _sbt("btn_small", 46, 22, 24, 8, PRIMARY_HI if primary else HOVER))
+	b.add_theme_stylebox_override("pressed", _sbt("btn_small", 46, 22, 24, 8, PRESS))
 	b.add_theme_font_size_override("font_size", fs(18))
 	if primary:
 		b.add_theme_color_override("font_color", Color("fff4d2"))
@@ -312,11 +326,11 @@ static func small_button(txt: String, primary := false) -> Button:
 static func chip_button(txt: String) -> Button:
 	var b := Button.new()
 	b.text = txt
-	b.custom_minimum_size = Vector2(0, 64)
-	b.add_theme_stylebox_override("normal", _sbt("btn_choice", 34, 17, 2, 4))
-	b.add_theme_stylebox_override("hover", _sbt("btn_choice", 34, 17, 2, 4, HOVER))
-	b.add_theme_stylebox_override("pressed", _sbt("btn_choice", 34, 17, 2, 4, PRESS))
-	b.add_theme_font_size_override("font_size", fs(17))
+	b.custom_minimum_size = Vector2(0, 62)
+	b.add_theme_stylebox_override("normal", _sbt("btn_med", 71, 25, 16, 4))
+	b.add_theme_stylebox_override("hover", _sbt("btn_med_hover", 71, 25, 16, 4))
+	b.add_theme_stylebox_override("pressed", _sbt("btn_med_down", 71, 25, 16, 4))
+	b.add_theme_font_size_override("font_size", fs(15))
 	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	b.pressed.connect(func(): Audio.click())
 	return b
@@ -467,71 +481,121 @@ static func stat_bar(fill: Color) -> Range:
 		which = "bar_fill_red"
 	elif fill.is_equal_approx(AZURE):
 		which = "bar_fill_blue"
-	var under := art("bar_track")
+	var under := art("bar_frame")
 	var over := art(which)
 	if under == null or over == null:
 		var pb := ProgressBar.new()
 		pb.show_percentage = false
-		pb.custom_minimum_size = Vector2(0, 14)
+		pb.custom_minimum_size = Vector2(0, 16)
 		var bg := StyleBoxFlat.new()
-		bg.bg_color = Color("bda98a")
-		bg.set_corner_radius_all(6)
+		bg.bg_color = Color("3a2a18")
+		bg.set_corner_radius_all(7)
 		var fg := StyleBoxFlat.new()
 		fg.bg_color = fill
-		fg.set_corner_radius_all(6)
+		fg.set_corner_radius_all(7)
 		pb.add_theme_stylebox_override("background", bg)
 		pb.add_theme_stylebox_override("fill", fg)
 		return pb
 	var tp := TextureProgressBar.new()
 	tp.texture_under = under
 	tp.texture_progress = over
+	# Grafika ma tę samą wysokość, w jakiej ją rysujemy, więc rozciągamy tylko
+	# w poziomie — ozdobne końcówki zostają nietknięte.
 	tp.nine_patch_stretch = true
-	tp.stretch_margin_left = 12
-	tp.stretch_margin_right = 12
+	tp.stretch_margin_left = 34
+	tp.stretch_margin_right = 34
 	tp.fill_mode = TextureProgressBar.FILL_LEFT_TO_RIGHT
-	tp.custom_minimum_size = Vector2(0, 27)
+	tp.custom_minimum_size = Vector2(0, 46)
 	tp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	return tp
 
-# ——— Gotowe fragmenty ekranów formularzy ————————————————————
+# Przełącznik z ozdobnym znacznikiem z paczki.
+static func toggle(txt: String, on: bool) -> CheckBox:
+	var c := CheckBox.new()
+	c.text = txt
+	c.button_pressed = on
+	var off_t := art("check_off")
+	var on_t := art("check_on")
+	if off_t and on_t:
+		c.add_theme_icon_override("unchecked", off_t)
+		c.add_theme_icon_override("checked", on_t)
+		c.add_theme_icon_override("unchecked_disabled", off_t)
+		c.add_theme_icon_override("checked_disabled", on_t)
+		c.add_theme_constant_override("h_separation", 12)
+	c.add_theme_color_override("font_color", INK)
+	c.add_theme_color_override("font_hover_color", GOLD)
+	c.add_theme_font_size_override("font_size", fs(18))
+	c.toggled.connect(func(_v): Audio.click())
+	return c
+
+# ——— Gotowe fragmenty ekranów ————————————————————————————————
 
 # Tytuł na górze lewej karty.
 static func title_bar(txt: String) -> Control:
-	var h := region(R_TITLE)
+	var h := region(M_HEAD)
 	var l := title(txt, 30)
 	l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	h.add_child(l)
 	return h
 
-# Listwa akcji w dolnej ramce lewej karty.
+# Listwa akcji u dołu lewej karty.
 static func action_bar(sep := 18) -> Dictionary:
-	var h := region(R_ACTIONS)
+	var h := region(M_ACTIONS)
 	var row := HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	row.anchor_left = 0.0
 	row.anchor_right = 1.0
-	row.offset_left = 40
-	row.offset_right = -40
-	row.offset_top = -32
-	row.offset_bottom = 32
+	row.offset_left = 0
+	row.offset_right = 0
+	row.offset_top = -34
+	row.offset_bottom = 34
 	row.add_theme_constant_override("separation", sep)
 	h.add_child(row)
 	return {"host": h, "row": row}
 
 # Prawa karta na ekranach formularzy — krótka notka dla gracza.
 static func hint_page(head: String, lines: Array) -> Control:
-	var c := scroll_column(R_PAGE_R, 10)
-	var box: VBoxContainer = c["box"]
-	box.add_child(heading(head, 22))
-	box.add_child(hsep())
-	box.add_child(spacer(4))
+	var c := scroll_column(M_HINTS, 10)
+	var box_: VBoxContainer = c["box"]
+	box_.add_child(heading(head, 22))
+	box_.add_child(flourish())
+	box_.add_child(spacer(2))
 	for l in lines:
 		var t := str(l)
 		if t == "":
-			box.add_child(spacer(8))
+			box_.add_child(spacer(8))
 		elif t.begins_with("# "):
-			box.add_child(heading(t.substr(2), 17))
+			box_.add_child(heading(t.substr(2), 17))
 		else:
-			box.add_child(body(t))
+			box_.add_child(body(t))
 	return c["host"]
+
+# Ozdobna karta pergaminu na ciemnym tle — nakładki i karty postaci.
+static func frame_card(pad := 34) -> PanelContainer:
+	var p := PanelContainer.new()
+	var sb := _sbt("card_frame", 96, 96, pad + 56, pad + 46)
+	if sb is StyleBoxTexture:
+		p.add_theme_stylebox_override("panel", sb)
+	else:
+		var f := StyleBoxFlat.new()
+		f.bg_color = PANEL
+		f.set_corner_radius_all(5)
+		f.set_border_width_all(3)
+		f.border_color = GOLD
+		f.content_margin_left = pad
+		f.content_margin_right = pad
+		f.content_margin_top = pad
+		f.content_margin_bottom = pad
+		p.add_theme_stylebox_override("panel", f)
+	return p
+
+# Zawartość jednego z gotowych pól na prawej karcie ekranu gry.
+static func box(r: Rect2, head := "", sep := 6) -> Dictionary:
+	var c := scroll_column(r, sep)
+	if head != "":
+		var l := heading(head.to_upper(), 15)
+		l.add_theme_color_override("font_color", MUTED)
+		(c["box"] as VBoxContainer).add_child(l)
+	return {"host": c["host"], "box": c["box"], "scroll": c["scroll"]}

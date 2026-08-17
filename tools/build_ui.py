@@ -1,69 +1,100 @@
+"""Assety z Kronikarz Asset Pack Extended -> assets/ui (komplet)."""
 import os, numpy as np
-from lib_wipe import load, save, wipe, restore_ink, clean_patches, wipe_label
-SRC = "gui_zip/Kronikarz_GUI_Godot/assets/"
-OUT = "ui_out"; os.makedirs(OUT, exist_ok=True)
+from PIL import Image, ImageDraw, ImageFilter
 
-menu = load(SRC+"backgrounds/menu_full.png")
-game = load(SRC+"backgrounds/game_full.png")
-grain = clean_patches(game, (120,120,1460,780), n=5, size=96, max_ink=0.009)
+IN, OUT = "incoming/", "ui_out3/"
+os.makedirs(OUT, exist_ok=True)
 
-# ——————————————————————— PŁYTY TŁA ———————————————————————
-m = menu.copy()
-wipe(m, (893,148,494,548), grain, soft=30, seed=5)      # cała kolumna przycisków naraz
-save(m, OUT+"/plate_menu.png")
+def trim(im, thr=8):
+    a = np.asarray(im.convert("RGBA"))
+    ys, xs = np.nonzero(a[:, :, 3] > thr)
+    return im.crop((int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1))
 
-g = game.copy()
-for i, r in enumerate([
-    (138,42,382,62), (1150,42,150,54), (1284,36,176,84), (1440,36,176,84),
-    (152,110,896,592), (138,706,908,178), (1150,118,430,768),
-]):
-    wipe(g, r, grain, soft=11, seed=31+i)
-for r in [(174,232,44,474), (960,232,44,474),
-          (1146,112,40,42), (1550,112,36,42),
-          (1146,852,40,40), (1552,852,34,38),
-          (474,704,50,36), (718,704,50,36),
-          (140,710,336,26), (764,710,282,26)]:
-    restore_ink(g, game, r, soft=7)
-save(g, OUT+"/plate_play.png")
+def prep(src, dst, width=None, do_trim=True):
+    im = Image.open(IN + src).convert("RGBA")
+    if do_trim and np.asarray(im)[:, :, 3].min() < 250:
+        im = trim(im)
+    if width:
+        w, h = im.size
+        im = im.resize((width, max(1, round(h * width / w))), Image.LANCZOS)
+    im.save(OUT + dst)
+    return im
 
-# ——————————————————————— PRZYCISKI (9-patch) ———————————————————————
-def plate(src, rect_text, pct=30, name=""):
-    a = load(SRC+src)
-    wipe_label(a, rect_text, soft=5, pct=pct)
-    save(a, OUT+"/"+name)
-    return a
+jobs = [
+    ("backgrounds/menu_background_open_book.png",       "plate_menu.png",  None, False),
+    ("backgrounds/gameplay_background_open_book_ui.png","plate_play.png",  None, False),
+    ("buttons/button_large.png",                        "btn_wide.png",         540),
+    ("buttons/states/button_wide_hover.png",            "btn_wide_hover.png",   540),
+    ("buttons/states/button_wide_pressed.png",          "btn_wide_down.png",    540),
+    ("buttons/states/button_wide_disabled.png",         "btn_wide_off.png",     540),
+    ("buttons/button_medium.png",                       "btn_med.png",          420),
+    ("buttons/states/button_medium_hover.png",          "btn_med_hover.png",    420),
+    ("buttons/states/button_medium_pressed.png",        "btn_med_down.png",     420),
+    ("buttons/states/button_medium_disabled.png",       "btn_med_off.png",      420),
+    ("buttons/button_small_topbar.png",                 "btn_small.png",        300),
+    ("frames/input_field.png",                          "field.png",            540),
+    ("ornaments/divider_ornament.png",                  "ornament.png",         420),
+    ("frames/parchment_content_frame.png",              "card_frame.png",       760),
+    ("controls/checkbox_checked.png",                   "check_on.png",          44),
+    ("controls/checkbox_unchecked.png",                 "check_off.png",         44),
+    ("controls/slider_gold.png",                        "slider.png",           420),
+]
+for j in jobs:
+    src, dst, w = j[0], j[1], j[2]
+    t = j[3] if len(j) > 3 else True
+    im = prep(src, dst, w, t)
+    print(f"  {dst:22s} {str(im.size):>12s}")
 
-plate("buttons/menu_new_story.png", (54,26,348,74), 34, "btn_wide_gold.png")
-plate("buttons/menu_load.png",      (50,18,348,74), 30, "btn_wide.png")
-plate("buttons/game_execute.png",   (24,14,146,48), 34, "btn_small_gold.png")
-plate("buttons/game_menu.png",      (22,10,108,42), 30, "btn_small.png")
-plate("buttons/game_choice_2.png",  (28,10,276,48), 30, "btn_choice.png")
-plate("panels/game_command_input.png", (34,16,640,44), 34, "field.png")
+# ——— paski: rama z paczki + wypełnienia dopasowane do jej szczeliny ———
+frame = trim(Image.open(IN + "bars/progress_bar_frame.png").convert("RGBA"))
+W0, H0 = frame.size
+BW = 286
+frame = frame.resize((BW, max(1, round(H0 * BW / W0))), Image.LANCZOS)
+frame.save(OUT + "bar_frame.png")
+BH = frame.size[1]
 
-# ——————————————————————— PASKI ———————————————————————
-def bar_parts(src, fill_x, track_x, name_fill, name_track=None):
-    a = load(SRC+src); h, w, _ = a.shape
-    cap_l, cap_r = 10, 10
-    fill = a.copy(); fill[:, cap_l:w-cap_r] = np.repeat(a[:, fill_x:fill_x+1], w-cap_l-cap_r, axis=1)
-    save(fill, OUT+"/"+name_fill)
-    if name_track:
-        tr = a.copy(); tr[:, cap_l:w-cap_r] = np.repeat(a[:, track_x:track_x+1], w-cap_l-cap_r, axis=1)
-        # lewy kapturek też musi być pusty
-        tr[:, :cap_l] = np.repeat(a[:, track_x:track_x+1], cap_l, axis=1)
-        save(tr, OUT+"/"+name_track)
+# szczelina = ciemne wnętrze ramy
+a = np.asarray(frame).astype(np.float32)
+lum = a[:, :, :3].mean(axis=2)
+dark = (a[:, :, 3] > 200) & (lum < 70)
+# najdłuższy ciągły ciemny odcinek w kolumnie przez środek ramy = szczelina
+col = dark[:, BW // 2]
+best, cur, s0 = (0, 0), 0, 0
+for i, v in enumerate(list(col) + [False]):
+    if v:
+        if cur == 0: s0 = i
+        cur += 1
+    else:
+        if cur > best[0]: best = (cur, s0)
+        cur = 0
+sy0, sy1 = best[1], best[1] + best[0]
+row = dark[(sy0 + sy1) // 2]
+xs = np.nonzero(row)[0]
+# wcięcie: wypełnienie ma leżeć w szczelinie, nie na złotej ramie ani ozdobach
+sx0, sx1 = int(xs.min()) + 30, int(xs.max()) - 30
+sy0, sy1 = sy0 + 3, sy1 - 2
+print(f"  szczelina paska: x={sx0}..{sx1} y={sy0}..{sy1} (rama {BW}x{BH})")
 
-bar_parts("bars/xp_bar.png", 120, 330, "bar_fill_gold.png", "bar_track.png")
-bar_parts("bars/health_bar.png", 120, 330, "bar_fill_red.png")
+def bar_fill(name, top, bot):
+    im = Image.new("RGBA", (BW, BH), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    h = sy1 - sy0
+    for i in range(h):
+        f = i / max(1, h - 1)
+        # ciemniej u góry i u dołu, jaśniej w środku — jak wypukły szkliwiony pasek
+        k = 1.0 - abs(f - 0.42) * 1.15
+        c = tuple(int(top[j] + (bot[j] - top[j]) * f) for j in range(3))
+        c = tuple(max(0, min(255, int(v * (0.62 + 0.5 * k)))) for v in c)
+        d.line([(sx0, sy0 + i), (sx1, sy0 + i)], fill=c + (255,))
+    # zaokrąglone końce, żeby pasek nie wyglądał jak wycięty prostokąt
+    m = Image.new("L", (BW, BH), 0)
+    r = (sy1 - sy0) // 2
+    ImageDraw.Draw(m).rounded_rectangle([sx0, sy0, sx1, sy1 - 1], r, fill=255)
+    im.putalpha(Image.composite(im.split()[3], Image.new("L", (BW, BH), 0), m))
+    im = im.filter(ImageFilter.GaussianBlur(0.5))
+    im.save(OUT + name)
 
-# mana — przebarwiony pasek złoty na chłodny błękit
-b = load(OUT+"/bar_fill_gold.png")
-r, gg, bl = b[:,:,0], b[:,:,1], b[:,:,2]
-lum = (r*0.35 + gg*0.45 + bl*0.20)
-b[:,:,0] = lum*0.42; b[:,:,1] = lum*0.66; b[:,:,2] = np.clip(lum*1.05, 0, 255)
-save(b, OUT+"/bar_fill_blue.png")
-
-# ——————————————————————— DETALE ———————————————————————
-import shutil
-shutil.copy(SRC+"details/menu_footer_ornament.png", OUT+"/ornament.png")
-shutil.copy(SRC+"details/menu_logo_area.png",       OUT+"/logo.png")
-print("assety UI gotowe")
+bar_fill("bar_fill_red.png",  (172, 62, 40), (104, 26, 18))
+bar_fill("bar_fill_blue.png", (86, 118, 152), (40, 62, 92))
+bar_fill("bar_fill_gold.png", (194, 156, 74), (118, 88, 32))
+print("  paski: bar_frame + 3 wypełnienia")

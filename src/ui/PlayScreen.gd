@@ -359,12 +359,38 @@ func _show_chronicle() -> void:
 	inner.add_theme_constant_override("separation", 6)
 	sc.add_child(inner)
 
+	if not Game.facts.is_empty():
+		inner.add_child(Ui.subtle("USTALONE FAKTY", 13))
+		var key_first: Array = []
+		var rest: Array = []
+		for f in Game.facts:
+			if str(f.get("waga", "")) == "kluczowy":
+				key_first.append(f)
+			else:
+				rest.append(f)
+		for f in key_first + rest:
+			var line := Ui.body("• " + str(f.get("tresc", "")))
+			if str(f.get("waga", "")) == "kluczowy":
+				line.add_theme_color_override("font_color", Ui.GOLD)
+			inner.add_child(line)
+			inner.add_child(Ui.subtle("   tura %d" % int(f.get("tura", 0)), 12))
+		inner.add_child(Ui.hsep())
+
 	_section(inner, "MIEJSCA", Game.locations,
 		func(x): return x["name"], func(x): return x.get("note", ""))
 	_section(inner, "ODKRYCIA", Game.discoveries,
-		func(x): return x["title"], func(x): return x.get("type", ""))
+		func(x): return x["title"],
+		func(x): return str(x.get("note", "")) if str(x.get("note", "")) != "" else str(x.get("type", "")))
 	_section(inner, "WĄTKI", Game.quests,
-		func(x): return x["title"], func(x): return x.get("note", ""))
+		func(x): return x["title"], func(x): return str(x.get("status", "")))
+
+	if not Game.events.is_empty():
+		inner.add_child(Ui.subtle("OŚ CZASU", 13))
+		var from := maxi(0, Game.events.size() - 40)
+		for i in range(from, Game.events.size()):
+			var e: Dictionary = Game.events[i]
+			inner.add_child(Ui.body("%d. %s" % [int(e.get("tura", 0)), str(e.get("opis", ""))]))
+		inner.add_child(Ui.hsep())
 
 	var close := Ui.small_button("Zamknij")
 	close.pressed.connect(func(): overlay.queue_free())
@@ -415,7 +441,14 @@ func _npc_tile(n: Dictionary) -> Control:
 	var title_txt := str(n.get("imie", "?"))
 	if str(n.get("rola", "")) != "":
 		title_txt += " · " + str(n.get("rola", ""))
-	v.add_child(Ui.body(title_txt))
+	var name_lbl := Ui.body(title_txt)
+	var stan := str(n.get("stan", "")).strip_edges().to_lower()
+	if stan == "martwy":
+		name_lbl.text = "† " + title_txt
+		name_lbl.add_theme_color_override("font_color", Ui.MUTED)
+	elif stan == "ranny" or stan == "zaginiony":
+		name_lbl.text = title_txt + " (%s)" % stan
+	v.add_child(name_lbl)
 	if str(n.get("relacja", "")) != "":
 		var rel := Ui.subtle(str(n.get("relacja", "")), 12)
 		rel.max_lines_visible = 2
@@ -463,6 +496,9 @@ func _show_npc_card(n: Dictionary) -> void:
 	if str(n.get("plec", "")) != "":
 		col.add_child(Ui.subtle("PŁEĆ", 12))
 		col.add_child(Ui.body(str(n.get("plec", "")).capitalize()))
+	if str(n.get("stan", "")) != "":
+		col.add_child(Ui.subtle("STAN", 12))
+		col.add_child(Ui.body(str(n.get("stan", "")).capitalize()))
 	col.add_child(Ui.subtle("POZNANO", 12))
 	col.add_child(Ui.body("Tura %d" % int(n.get("tura", 0))))
 	col.add_child(Ui.subtle("RELACJA I UCZUCIA", 12))

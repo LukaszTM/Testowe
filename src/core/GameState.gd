@@ -16,6 +16,8 @@ var quests: Array = []         # [{title, note, status}]
 var npcs: Array = []           # [{imie, plec, rola, relacja, tura}] — biblioteka postaci
 var suggestions: Array = []    # podpowiedzi na bieżącą turę (od Mistrza Gry)
 var summary := ""              # streszczenie fabuły — pamięć długa, gdy stare tury wypadną z okna
+var facts: Array = []          # [{tresc, waga, tura}] — trwałe fakty świata, obowiązujące do końca kroniki
+var events: Array = []         # [{opis, tura}] — oś czasu wydarzeń
 var save_path := ""            # plik tej kroniki (pusty = jeszcze niezapisana)
 
 const ATTR_KEYS := ["sila", "zrecznosc", "intelekt", "charyzma"]
@@ -42,6 +44,7 @@ var settings: Dictionary = {
 }
 
 const SETTINGS_PATH := "user://ustawienia.json"
+const SAVE_VERSION := 4        # 4: fakty, oś czasu, streszczenie, stan generatora
 
 func _ready() -> void:
 	load_settings()
@@ -184,6 +187,8 @@ func begin_adventure() -> void:
 	Saves.save_character(character)
 
 	summary = ""
+	facts.clear()
+	events.clear()
 	var prof := profile()
 	# Startowy punkt zaczepienia w Kronice — nazwa z kreatora świata,
 	# a dopiero w jej braku szablon gatunku.
@@ -287,6 +292,8 @@ func _apply_turn_effects(action: String, roll: Dictionary, state: Dictionary) ->
 		_merge_locations(state.get("miejsca", []))
 		_merge_discoveries(state.get("odkrycia", []))
 		_merge_quests(state.get("watki", []))
+		_merge_facts(state.get("fakty", []))
+		_merge_events(state.get("wydarzenia", []))
 	else:
 		# Tryb offline: proste reguły.
 		xp_gain = 8
@@ -380,7 +387,8 @@ func _merge_discoveries(arr) -> void:
 		else:
 			nazwa = str(it).strip_edges()
 		if nazwa != "":
-			_add_discovery(nazwa, rodzaj if rodzaj != "" else "Trop")
+			var opis2 := str(it.get("opis", "")).strip_edges() if typeof(it) == TYPE_DICTIONARY else ""
+			_add_discovery(nazwa, rodzaj if rodzaj != "" else "Trop", opis2)
 
 func _merge_quests(arr) -> void:
 	if typeof(arr) != TYPE_ARRAY:
@@ -406,6 +414,64 @@ func _merge_quests(arr) -> void:
 			_add_quest(tytul, "")
 			if stan != "" and not quests.is_empty():
 				quests[-1]["status"] = stan
+
+# Trwałe fakty świata. To one sprawiają, że setna tura może wynikać z trzeciej:
+# raz ustalona prawda zostaje w kronice i wraca do modelu w każdej turze.
+func _merge_facts(arr) -> void:
+	if typeof(arr) != TYPE_ARRAY:
+		return
+	for it in arr:
+		var tresc := ""
+		var waga := "zwykly"
+		if typeof(it) == TYPE_DICTIONARY:
+			tresc = str(it.get("tresc", "")).strip_edges()
+			waga = str(it.get("waga", "zwykly")).strip_edges().to_lower()
+		else:
+			tresc = str(it).strip_edges()
+		if tresc == "":
+			continue
+		var key := tresc.to_lower()
+		var hit := false
+		for f in facts:
+			if str(f.get("tresc", "")).to_lower() == key:
+				if waga == "kluczowy":
+					f["waga"] = "kluczowy"
+				hit = true
+				break
+		if hit:
+			continue
+		facts.append({"tresc": tresc.left(240),
+			"waga": "kluczowy" if waga == "kluczowy" else "zwykly", "tura": turn})
+	_trim_facts()
+
+# Kronika nie może rosnąć bez końca. Fakty kluczowe zostają zawsze,
+# zwykłe wypadają od najstarszego.
+func _trim_facts() -> void:
+	if facts.size() <= 140:
+		return
+	var keep: Array = []
+	var ordinary: Array = []
+	for f in facts:
+		if str(f.get("waga", "")) == "kluczowy":
+			keep.append(f)
+		else:
+			ordinary.append(f)
+	while keep.size() + ordinary.size() > 140 and not ordinary.is_empty():
+		ordinary.pop_front()
+	facts = keep + ordinary
+
+func _merge_events(arr) -> void:
+	if typeof(arr) != TYPE_ARRAY:
+		return
+	for it in arr:
+		var opis := str(it.get("opis", "")).strip_edges() if typeof(it) == TYPE_DICTIONARY else str(it).strip_edges()
+		if opis == "":
+			continue
+		if not events.is_empty() and str(events[-1].get("opis", "")).to_lower() == opis.to_lower():
+			continue
+		events.append({"opis": opis.left(200), "tura": turn})
+	while events.size() > 200:
+		events.pop_front()
 
 # Streszczenie fabuły pisane przez Mistrza Gry co turę. Gdy najstarsze sceny
 # wypadną z okna kontekstu, to jedyne, co po nich zostaje.
@@ -442,15 +508,22 @@ func _merge_npcs(arr) -> void:
 				x["rola"] = str(n.get("rola", x.get("rola", "")))
 				x["relacja"] = str(n.get("relacja", x.get("relacja", "")))
 				x["plec"] = str(n.get("plec", x.get("plec", "")))
+				var st2 := str(n.get("stan", "")).strip_edges().to_lower()
+				if st2 != "":
+					x["stan"] = st2
+				x["ostatnio"] = turn
 				found = true
 				break
 		if not found and npcs.size() < 40:
+			var stan := str(n.get("stan", "")).strip_edges().to_lower()
 			npcs.append({
 				"imie": imie,
 				"plec": str(n.get("plec", "")),
 				"rola": str(n.get("rola", "")),
 				"relacja": str(n.get("relacja", "")),
+				"stan": stan if stan != "" else "żywy",
 				"tura": turn,
+				"ostatnio": turn,
 			})
 
 # Decyduje, czy dane działanie wymaga rzutu kością — zależnie od trybu w ustawieniach.
@@ -499,11 +572,13 @@ func _add_location(loc: Dictionary) -> void:
 			return
 	locations.append(loc.duplicate())
 
-func _add_discovery(title: String, kind: String) -> void:
+func _add_discovery(title: String, kind: String, note := "") -> void:
 	for d in discoveries:
 		if str(d["title"]).to_lower() == title.to_lower():
+			if note != "" and str(d.get("note", "")) == "":
+				d["note"] = note
 			return
-	discoveries.append({"title": title, "type": kind, "time": _clock()})
+	discoveries.append({"title": title, "type": kind, "note": note, "time": _clock(), "tura": turn})
 
 func _add_quest(title: String, note: String) -> void:
 	for q in quests:
@@ -542,7 +617,7 @@ func _clock() -> String:
 
 func to_dict() -> Dictionary:
 	return {
-		"version": 3,
+		"version": SAVE_VERSION,
 		"saved_at": Time.get_datetime_string_from_system(),
 		"world": world,
 		"character": character,
@@ -553,8 +628,13 @@ func to_dict() -> Dictionary:
 		"npcs": npcs,
 		"suggestions": suggestions,
 		"summary": summary,
+		"facts": facts,
+		"events": events,
 		"turn": turn,
 		"seed": seed_value,
+		# Samo ziarno nie wystarczy: po wczytaniu generator zaczynałby sekwencję
+		# od nowa i rzuty powtarzałyby wcześniejsze wyniki. Zapisujemy pozycję.
+		"rng_state": str(rng.state),
 	}
 
 func from_dict(d: Dictionary) -> void:
@@ -567,12 +647,36 @@ func from_dict(d: Dictionary) -> void:
 	npcs = d.get("npcs", [])
 	suggestions = d.get("suggestions", [])
 	summary = str(d.get("summary", ""))
+	facts = d.get("facts", [])
+	events = d.get("events", [])
 	turn = int(d.get("turn", 0))
 	seed_value = int(d.get("seed", 0))
 	rng.seed = seed_value
+	# Wersje starsze niż 4 nie zapisywały pozycji generatora — wtedy zostaje
+	# samo ziarno i pierwsze rzuty po wczytaniu mogą się powtórzyć.
+	var st := str(d.get("rng_state", ""))
+	if st != "" and st.is_valid_int():
+		rng.state = int(st)
+	_migrate(int(d.get("version", 1)))
 	started = true
 	ensure_character_stats()
 	emit_signal("chronicle_changed")
+
+# Dostosowuje wczytaną kronikę do bieżącej wersji formatu.
+func _migrate(from_version: int) -> void:
+	if from_version >= SAVE_VERSION:
+		return
+	if from_version < 4:
+		# Starsze zapisy nie miały pamięci świata. Zostawiamy je puste —
+		# Mistrz Gry odbuduje ją w kolejnych turach z bloku stanu.
+		if typeof(facts) != TYPE_ARRAY:
+			facts = []
+		if typeof(events) != TYPE_ARRAY:
+			events = []
+		for n in npcs:
+			if not n.has("stan"):
+				n["stan"] = "żywy"
+	print("Kronika: zapis w wersji %d dostosowany do %d." % [from_version, SAVE_VERSION])
 
 # ——— Ustawienia ———————————————————————————————————————————
 

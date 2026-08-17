@@ -108,6 +108,19 @@ W menu **Ustawienia** można zmienić m.in.:
 - **rzuty kością** — tylko przy starciach i ryzyku (domyślnie), zawsze albo nigdy,
 - **wielkość tekstu**.
 
+## Testy
+
+Zestaw testów jednostkowych uruchamia się bez okna gry:
+
+```
+godot --headless --script tests/run_tests.gd
+```
+
+Kod wyjścia 0 oznacza, że wszystko przeszło (nadaje się do CI). Testy
+sprawdzają parser odpowiedzi Mistrza Gry, zapis i wczytanie kroniki wraz ze
+stanem generatora losowego, migrację starszych zapisów, rozwój postaci oraz
+scalanie wpisów Kroniki.
+
 ## Licencja
 
 Kod gry objęty jest licencją MIT (patrz [`LICENSE`](LICENSE)) — można go
@@ -118,5 +131,9 @@ Dołączone zasoby również nadają się do użytku komercyjnego:
 
 - **Czcionki Great Vibes, Almendra i EB Garamond** — licencja SIL Open Font
   License 1.1 (patrz [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt)).
+Pełne zestawienie materiałów wraz z ich pochodzeniem: [`ATTRIBUTION.md`](ATTRIBUTION.md).
+Muzyka w `assets/music/` **nie ma jeszcze ustalonej licencji** — trzeba ją
+uzupełnić przed publikacją.
+
 - **Dźwięki** (`assets/audio/`) — wygenerowane na potrzeby projektu,
   możesz ich używać i podmieniać bez ograniczeń.

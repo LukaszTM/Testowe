@@ -225,8 +225,11 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 			var who := str(n.get("imie", ""))
 			var role := str(n.get("rola", "")).strip_edges()
 			var rel := str(n.get("relacja", "")).strip_edges()
+			var st := str(n.get("stan", "")).strip_edges().to_lower()
 			if role != "":
 				who += " — " + role
+			if st != "" and st != "żywy":
+				who += " [" + st.to_upper() + "]"
 			if rel != "":
 				who += " (" + rel + ")"
 			known.append(who)
@@ -251,15 +254,36 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 		lines.append("")
 		lines.append("KANON — jedyne poprawne brzmienia nazw. Przepisuj je dokładnie tak, jak stoją poniżej (wolno odmieniać przez przypadki). Nie zmieniaj ich, nie wymyślaj wariantów i nie zapominaj o tych osobach:")
 		lines.append_array(canon)
+	# Pamięć świata. Fakty kluczowe wracają zawsze, zwykłe — te najświeższe.
+	# To one sprawiają, że setna tura może wynikać z trzeciej.
+	var key_facts: Array = []
+	var recent: Array = []
+	for f in Game.facts:
+		if str(f.get("waga", "")) == "kluczowy":
+			key_facts.append("· [tura %d] %s" % [int(f.get("tura", 0)), str(f.get("tresc", ""))])
+		else:
+			recent.append("· [tura %d] %s" % [int(f.get("tura", 0)), str(f.get("tresc", ""))])
+	if key_facts.size() > 20:
+		key_facts = key_facts.slice(key_facts.size() - 20)
+	if recent.size() > 10:
+		recent = recent.slice(recent.size() - 10)
+	if not key_facts.is_empty() or not recent.is_empty():
+		lines.append("")
+		lines.append("PAMIĘĆ ŚWIATA — fakty ustalone wcześniej. Obowiązują nadal i nie wolno im zaprzeczyć. Jeśli scena ich dotyka, oprzyj się na nich zamiast wymyślać na nowo:")
+		lines.append_array(key_facts)
+		lines.append_array(recent)
+
 	lines.append("")
 	lines.append("FORMAT ODPOWIEDZI (bezwzględny): PIERWSZA linia każdej odpowiedzi to blok stanu — jedna linia czystego JSON, bez bloku kodu:")
-	lines.append('###STAN {"streszczenie":"Marta, zielarka z Kazimierza Dolnego, przyznała, że list przyszedł ze składu przy Starym Trakcie. Gracz szuka nadawcy; Marta boi się, że ktoś ją obserwuje.","postacie":[{"imie":"Marta","plec":"kobieta","rola":"zielarka","relacja":"nieufna, ale zaciekawiona graczem"}],"miejsca":[{"nazwa":"Skład przy Starym Trakcie","opis":"pusty magazyn za miastem"}],"odkrycia":[{"nazwa":"List bez podpisu","rodzaj":"Trop"}],"watki":[{"tytul":"Kto wysłał list","stan":"otwarty"}],"hp":0,"mana":0,"pd":10,"podpowiedzi":["Zapytaj Martę o list","Rozejrzyj się po składzie","Wróć do gospody na wieczerzę"]}')
+	lines.append('###STAN {"streszczenie":"Marta, zielarka z Kazimierza Dolnego, przyznała, że list przyszedł ze składu przy Starym Trakcie. Gracz szuka nadawcy; Marta boi się, że ktoś ją obserwuje.","postacie":[{"imie":"Marta","plec":"kobieta","rola":"zielarka","relacja":"nieufna, ale zaciekawiona graczem","stan":"żywy"}],"miejsca":[{"nazwa":"Skład przy Starym Trakcie","opis":"pusty magazyn za miastem"}],"odkrycia":[{"nazwa":"List bez podpisu","rodzaj":"Trop","opis":"znaleziony w piwnicy, bez pieczęci"}],"watki":[{"tytul":"Kto wysłał list","stan":"otwarty"}],"fakty":[{"tresc":"List bez podpisu przyszedł ze składu przy Starym Trakcie; Marta rozpoznała pismo wójta.","waga":"kluczowy"}],"wydarzenia":[{"opis":"Marta przyznała się do znajomości pisma na liście."}],"hp":0,"mana":0,"pd":10,"podpowiedzi":["Zapytaj Martę o list","Rozejrzyj się po składzie","Wróć do gospody na wieczerzę"]}')
 	lines.append("Po niej pusta linia, a potem właściwa narracja. Gracz nie widzi bloku — nie wspominaj o nim w tekście.")
 	lines.append("- streszczenie: 2–3 zdania streszczające CAŁĄ opowieść od początku — kto, gdzie, co się wydarzyło i co jest teraz stawką. Pisz je od nowa w każdej turze, dopisując najnowsze wydarzenia. Po starszych scenach zostanie tylko to streszczenie, więc nie pomijaj w nim nazw własnych.")
-	lines.append("- postacie: WSZYSTKIE postacie niezależne obecne w tej scenie (także wspomniane wcześniej); w polu relacja krótko: aktualne uczucia i powiązania z graczem.")
+	lines.append("- postacie: WSZYSTKIE postacie niezależne obecne w tej scenie (także wspomniane wcześniej); w polu relacja krótko: aktualne uczucia i powiązania z graczem; w polu stan: „żywy”, „ranny”, „martwy” albo „zaginiony”.")
 	lines.append("- miejsca: TYLKO miejsca, które pojawiły się albo zmieniły w tej turze — nazwa dokładnie tak, jak brzmi w opowieści, plus pół zdania opisu. Nie powtarzaj miejsc już znanych z KANONU.")
-	lines.append("- odkrycia: TYLKO przedmioty, tropy i informacje zdobyte w tej turze; rodzaj to „Przedmiot”, „Trop” albo „Wiedza”.")
+	lines.append("- odkrycia: TYLKO przedmioty, tropy i informacje zdobyte w tej turze; rodzaj to „Przedmiot”, „Trop” albo „Wiedza”; w opisie gdzie znaleziono i co to znaczy.")
 	lines.append("- watki: otwarte wątki fabularne — krótki tytuł i stan („otwarty” albo „zamknięty”). Wątek domknięty w tej turze oznacz jako zamknięty.")
+	lines.append("- fakty: prawdy o świecie ustalone w tej turze, które mają obowiązywać DO KOŃCA opowieści — kto kim naprawdę jest, kto kogo zdradził, co oznacza znaleziony przedmiot, co się nieodwracalnie stało. Pisz pełnym zdaniem, z nazwami własnymi. Waga „kluczowy” dla zwrotów akcji i tajemnic, „zwykly” dla reszty. Nie powtarzaj faktów, które już są w PAMIĘCI ŚWIATA.")
+	lines.append("- wydarzenia: jedno zdanie podsumowujące, co wydarzyło się w tej turze — wpis do osi czasu.")
 	lines.append("- Puste pola zostawiaj jako puste listy. Nie wymyślaj wpisów na siłę — Kronika ma zawierać wyłącznie to, co naprawdę padło w opowieści.")
 	lines.append("- hp: zmiana Zdrowia gracza w tej turze (ujemna przy obrażeniach; zwykle 0).")
 	lines.append("- mana: zmiana Many gracza (ujemna przy użyciu mocy%s)." % ("" if has_mana else "; w tym świecie zawsze 0"))
@@ -267,31 +291,65 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 	lines.append("- podpowiedzi: dokładnie 3 krótkie (do 8 słów) propozycje następnego ruchu gracza, w trybie rozkazującym, ściśle wynikające z bieżącej sceny — sensowne, różnorodne opcje, nie oczywistości.")
 	return "\n".join(lines)
 
-# Wycina blok ###STAN z odpowiedzi modelu (z początku, końca albo środka).
+# Wycina blok ###STAN z odpowiedzi modelu. Model bywa nieposłuszny: potrafi
+# wstawić blok na końcu, opakować go w ```json, rozbić JSON na wiele linii albo
+# pominąć sam znacznik. Szukamy więc pierwszego nawiasu klamrowego i czytamy
+# zbalansowany obiekt, licząc klamry z pominięciem tych wewnątrz napisów.
 # Zwraca {text, state}.
 func parse_state(text: String) -> Dictionary:
-	var idx := text.find("###STAN")
-	if idx == -1:
-		return {"text": text.strip_edges(), "state": {}}
-	var nl := text.find("\n", idx)
-	var line := text.substr(idx) if nl == -1 else text.substr(idx, nl - idx)
-	var clean := text.substr(0, idx) + ("" if nl == -1 else text.substr(nl))
-	var state := _parse_state_json(line.substr(7))
-	if state.is_empty():
-		# JSON mógł zostać rozbity na kilka linii — spróbuj całej reszty.
-		state = _parse_state_json(text.substr(idx + 7))
-		if not state.is_empty():
-			clean = text.substr(0, idx)
-	return {"text": clean.strip_edges(), "state": state}
+	var marker := text.find("###STAN")
+	var from := marker + 7 if marker != -1 else 0
+	var open_brace := text.find("{", from)
+	if open_brace == -1:
+		return {"text": _clean_fences(text), "state": {}}
+	# Bez znacznika ufamy tylko blokowi na samym początku odpowiedzi —
+	# inaczej wzięlibyśmy klamrę z treści opowieści.
+	if marker == -1 and text.substr(0, open_brace).strip_edges().replace("`", "").replace("json", "") != "":
+		return {"text": _clean_fences(text), "state": {}}
+	var close_brace := _match_brace(text, open_brace)
+	if close_brace == -1:
+		return {"text": _clean_fences(text), "state": {}}
+	var parsed = JSON.parse_string(text.substr(open_brace, close_brace - open_brace + 1))
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return {"text": _clean_fences(text), "state": {}}
+	var cut_from := marker if marker != -1 else open_brace
+	var rest := text.substr(close_brace + 1)
+	return {"text": _clean_fences(text.substr(0, cut_from) + rest), "state": parsed}
 
-func _parse_state_json(raw: String) -> Dictionary:
-	raw = raw.strip_edges()
-	raw = raw.trim_prefix("```json").trim_prefix("```").trim_suffix("```").strip_edges()
-	var brace := raw.find("{")
-	if brace < 0:
-		return {}
-	var parsed = JSON.parse_string(raw.substr(brace))
-	return parsed if typeof(parsed) == TYPE_DICTIONARY else {}
+# Indeks klamry zamykającej obiekt zaczynający się w „start”, albo -1.
+func _match_brace(t: String, start: int) -> int:
+	var depth := 0
+	var in_str := false
+	var escaped := false
+	for i in range(start, t.length()):
+		var c := t[i]
+		if in_str:
+			if escaped:
+				escaped = false
+			elif c == "\\":
+				escaped = true
+			elif c == "\"":
+				in_str = false
+			continue
+		if c == "\"":
+			in_str = true
+		elif c == "{":
+			depth += 1
+		elif c == "}":
+			depth -= 1
+			if depth == 0:
+				return i
+	return -1
+
+# Usuwa resztki ogrodzeń kodu, gdy model opakował blok w ```.
+func _clean_fences(t: String) -> String:
+	var out := ""
+	for line in t.split("\n"):
+		var trimmed := str(line).strip_edges()
+		if trimmed == "```" or trimmed == "```json":
+			continue
+		out += str(line) + "\n"
+	return out.strip_edges()
 
 # Historia rozmowy w formacie Claude API (role user/assistant).
 # Pierwszy wpis musi mieć rolę "user", więc zaczynamy syntetycznym otwarciem.
@@ -390,10 +448,10 @@ func _claude_request(system: String, messages: Array) -> String:
 		emit_signal("ai_state", true, "Mistrz Gry: Claude (chmura)")
 	return out
 
-# ——— [DEV] Test połączenia z Claude API ————————————————————————
+# ——— Test połączenia z Claude API (tylko wersja deweloperska) ————————
 #
-# UWAGA: narzędzie deweloperskie, do usunięcia w wersji finalnej gry
-# (razem z przyciskiem „Testuj połączenie” w SettingsScreen.gd).
+# Narzędzie deweloperskie. Przycisk, który je wywołuje, powstaje w ustawieniach
+# tylko przy OS.is_debug_build(), więc w wyeksportowanej grze jest nieosiągalny.
 # Wysyła minimalne zapytanie i zwraca {ok: bool, note: String}.
 func dev_test_claude(key: String, base: String, model: String) -> Dictionary:
 	key = key.strip_edges()

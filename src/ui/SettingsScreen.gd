@@ -19,7 +19,7 @@ var _music_vol_val: Label
 var _scale: HSlider
 var _scale_val: Label
 
-# [DEV] Test API — do usunięcia w wersji finalnej.
+# Test połączenia — tylko w wersji deweloperskiej (patrz _dev_test_row).
 var _test_btn: Button
 var _test_result: Label
 
@@ -150,13 +150,14 @@ func _ready() -> void:
 	# ——— Mistrz Gry ———
 	col.add_child(Ui.heading("Mistrz Gry", 19))
 	var mode := Ui.dropdown("Kto prowadzi opowieść", [
-		"Offline — narracja proceduralna (prosta, darmowa)",
+		"Offline — tryb demonstracyjny, narracja ze schematów",
 		"Claude API — pełny Mistrz Gry w chmurze (zalecane)",
 		"Ollama — model lokalny na tym komputerze"])
 	_mode = mode["edit"]
 	_mode.select({"offline": 0, "claude": 1, "ollama": 2, "ai": 2}.get(str(Game.settings.get("mode", "offline")), 0))
 	_mode.item_selected.connect(func(_i): _toggle_ai())
 	col.add_child(mode["row"])
+	col.add_child(Ui.subtle("Tryb offline składa sceny z gotowych zdań i rozpoznaje tylko rodzaj działania (rozglądanie, rozmowa, ruch, walka). Nadaje się do obejrzenia gry bez klucza API, ale nie prowadzi prawdziwej opowieści — do gry na dłużej wybierz Claude API.", 12))
 
 	_claude_rows = VBoxContainer.new()
 	_claude_rows.add_theme_constant_override("separation", 10)
@@ -177,22 +178,13 @@ func _ready() -> void:
 	_claude_model = cmodel["edit"]
 	_claude_rows.add_child(cmodel["row"])
 
-	# [DEV] Przycisk testu połączenia — do usunięcia w wersji finalnej
-	# (razem z Narrator.dev_test_claude i polami _test_btn/_test_result).
-	var trow := HBoxContainer.new()
-	trow.add_theme_constant_override("separation", 12)
-	_claude_rows.add_child(trow)
-	_test_btn = Ui.small_button("Testuj połączenie")
-	_test_btn.custom_minimum_size = Vector2(240, 48)
-	_test_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_test_btn.pressed.connect(_on_test_api)
-	trow.add_child(_test_btn)
-	_test_result = Ui.subtle("", 13)
-	_test_result.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_test_result.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	trow.add_child(_test_result)
+	# Przycisk testu połączenia jest narzędziem deweloperskim. Zamiast pamiętać
+	# o jego usunięciu przed premierą, sam znika w zbudowanej wersji gry.
+	if OS.is_debug_build():
+		_claude_rows.add_child(_dev_test_row())
 
 	_ollama_rows = VBoxContainer.new()
+
 	_ollama_rows.add_theme_constant_override("separation", 10)
 	col.add_child(_ollama_rows)
 	var host := Ui.field("Adres Ollamy", "http://localhost:11434", Game.settings.get("ai_host", "http://localhost:11434"))
@@ -238,7 +230,23 @@ func _toggle_ai() -> void:
 	_claude_rows.visible = _mode.selected == 1
 	_ollama_rows.visible = _mode.selected == 2
 
-# [DEV] Obsługa testu API — do usunięcia w wersji finalnej.
+# Wiersz z testem połączenia. Budowany tylko w wersji deweloperskiej —
+# OS.is_debug_build() jest fałszywe w wyeksportowanej grze, więc gracz go
+# nigdy nie zobaczy i nie trzeba pamiętać o wycinaniu kodu przed premierą.
+func _dev_test_row() -> Control:
+	var trow := HBoxContainer.new()
+	trow.add_theme_constant_override("separation", 12)
+	_test_btn = Ui.small_button("Testuj połączenie")
+	_test_btn.custom_minimum_size = Vector2(240, 48)
+	_test_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_test_btn.pressed.connect(_on_test_api)
+	trow.add_child(_test_btn)
+	_test_result = Ui.subtle("", 13)
+	_test_result.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_test_result.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	trow.add_child(_test_result)
+	return trow
+
 func _on_test_api() -> void:
 	_test_btn.disabled = true
 	_test_result.add_theme_color_override("font_color", Ui.MUTED)

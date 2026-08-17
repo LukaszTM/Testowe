@@ -28,6 +28,16 @@ func _ready() -> void:
 	motto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	mv.add_child(motto)
 
+	# Numer wersji bierzemy z project.godot — jedno źródło prawdy, żeby paczka,
+	# okno gry i plik wykonywalny nie podawały trzech różnych numerów.
+	var ver := Ui.region(Rect2(900, 700, 456, 30))
+	add_child(ver)
+	var vl := Ui.subtle("wersja %s · gra desktopowa · silnik Godot" % _version(), 13)
+	vl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	ver.add_child(vl)
+
 	var col := Ui.column(Ui.M_BUTTONS, 16)
 	add_child(col["host"])
 	var box: VBoxContainer = col["box"]
@@ -49,3 +59,7 @@ func _entry(txt: String, primary: bool, action: Callable) -> Button:
 	b.add_theme_font_size_override("font_size", Ui.fs(26))
 	b.pressed.connect(action)
 	return b
+
+func _version() -> String:
+	var v = ProjectSettings.get_setting("application/config/version", "")
+	return str(v) if str(v) != "" else "—"

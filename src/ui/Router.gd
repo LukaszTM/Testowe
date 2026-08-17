@@ -35,6 +35,7 @@ func _ready() -> void:
 
 	Game.router = self
 	goto("menu")
+	Audio.play_music()
 
 func goto(screen: String, _arg = null) -> void:
 	if _current and is_instance_valid(_current):

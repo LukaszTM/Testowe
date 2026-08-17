@@ -13,6 +13,9 @@ var _dice: OptionButton
 var _res: OptionButton
 var _winmode: OptionButton
 var _sfx: CheckBox
+var _music: CheckBox
+var _music_vol: HSlider
+var _music_vol_val: Label
 var _scale: HSlider
 var _scale_val: Label
 
@@ -30,6 +33,8 @@ func _ready() -> void:
 		"Gra rysuje się zawsze w tej samej przestrzeni i skaluje do okna, więc każda rozdzielczość pokazuje ten sam układ księgi.",
 		"# Wielkość tekstu",
 		"Podnieś, jeśli czytasz z daleka albo na dużym ekranie. Działa po zapisaniu.",
+		"# Muzyka",
+		"Utwory lecą w losowej kolejności, przenikając jeden w drugi. Możesz dorzucić własne.",
 		"# Mistrz Gry",
 		"Offline to prosta narracja proceduralna. Claude API prowadzi pełną rozgrywkę: tworzy postacie, ich dialogi i reaguje na Twoje decyzje.",
 		"# Klucz API",
@@ -68,6 +73,46 @@ func _ready() -> void:
 	col.add_child(Ui.heading("Dźwięk", 19))
 	_sfx = Ui.toggle("Dźwięki przycisków", bool(Game.settings.get("sfx_on", true)))
 	col.add_child(_sfx)
+
+	_music = Ui.toggle("Muzyka", bool(Game.settings.get("music_on", true)))
+	# Włącznik działa od razu — słychać, co się ustawia.
+	_music.toggled.connect(func(on):
+		Game.settings["music_on"] = on
+		Audio.apply_settings())
+	col.add_child(_music)
+
+	col.add_child(Ui.subtle("GŁOŚNOŚĆ MUZYKI", 14))
+	var vrow := HBoxContainer.new()
+	vrow.add_theme_constant_override("separation", 14)
+	col.add_child(vrow)
+	_music_vol = HSlider.new()
+	_music_vol.min_value = 0.0
+	_music_vol.max_value = 1.0
+	_music_vol.step = 0.05
+	_music_vol.value = float(Game.settings.get("music_volume", 0.55))
+	_music_vol.custom_minimum_size = Vector2(0, 46)
+	_music_vol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_music_vol.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_music_vol.value_changed.connect(func(v):
+		_music_vol_val.text = "%d%%" % int(round(v * 100))
+		Audio.preview_volume(v))
+	vrow.add_child(_music_vol)
+	_music_vol_val = _value_label("%d%%" % int(round(_music_vol.value * 100)))
+	vrow.add_child(_music_vol_val)
+
+	var mrow := HBoxContainer.new()
+	mrow.add_theme_constant_override("separation", 12)
+	col.add_child(mrow)
+	var skip := Ui.small_button("Następny utwór")
+	skip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	skip.pressed.connect(func(): Audio.skip())
+	mrow.add_child(skip)
+	var open_dir := Ui.small_button("Katalog z muzyką")
+	open_dir.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	open_dir.pressed.connect(func(): OS.shell_open(Audio.user_music_path()))
+	mrow.add_child(open_dir)
+
+	col.add_child(Ui.subtle("Utworów w bibliotece: %d. Własne kawałki (mp3 lub ogg) wystarczy wrzucić do katalogu „muzyka” — gra znajdzie je sama po zapisaniu ustawień." % Audio.track_count(), 12))
 
 	col.add_child(Ui.hsep())
 
@@ -220,11 +265,14 @@ func _save() -> void:
 		var r: Vector2i = _res_values[clampi(_res.selected, 0, _res_values.size() - 1)]
 		Game.settings["resolution"] = "%dx%d" % [r.x, r.y]
 	Game.settings["sfx_on"] = _sfx.button_pressed
+	Game.settings["music_on"] = _music.button_pressed
+	Game.settings["music_volume"] = _music_vol.value
 	Game.settings["font_scale"] = _scale.value
 
 	Ui.scale = _scale.value
 	Game.save_settings()
 	Game.apply_display()
+	Audio.apply_settings()
 	if Game.router:
 		(Game.router as Control).theme = Ui.build_theme()
 	Game.router.goto("menu")

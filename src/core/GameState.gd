@@ -35,6 +35,8 @@ var settings: Dictionary = {
 	"resolution": "1280x720",             # "SZERxWYS"
 	"window_mode": "windowed",            # "windowed" / "borderless" / "fullscreen"
 	"sfx_on": true,
+	"music_on": true,
+	"music_volume": 0.55,
 	"dice_mode": "risk",                  # "risk" / "always" / "off"
 }
 

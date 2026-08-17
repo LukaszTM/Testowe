@@ -230,6 +230,24 @@ static func build_theme() -> Theme:
 	if _f_bold:
 		t.set_font("bold_font", "RichTextLabel", _f_bold)
 
+	# Suwak: tor to rama paska, gałka wycięta z grafiki suwaka z paczki.
+	t.set_stylebox("slider", "HSlider", _sbt("bar_frame", 34, 0, 0, 23))
+	var grab := StyleBoxFlat.new()
+	grab.bg_color = Color("a8842e")
+	grab.set_corner_radius_all(7)
+	grab.content_margin_left = 0
+	grab.content_margin_right = 0
+	grab.content_margin_top = 7
+	grab.content_margin_bottom = 7
+	t.set_stylebox("grabber_area", "HSlider", grab)
+	t.set_stylebox("grabber_area_highlight", "HSlider", grab)
+	var knob := art("slider_knob")
+	if knob:
+		t.set_icon("grabber", "HSlider", knob)
+		t.set_icon("grabber_highlight", "HSlider", knob)
+		t.set_icon("grabber_disabled", "HSlider", knob)
+	t.set_constant("center_grabber", "HSlider", 1)
+
 	t.set_stylebox("panel", "ScrollContainer", StyleBoxEmpty.new())
 	t.set_color("font_color", "CheckButton", INK)
 	t.set_font_size("font_size", "CheckButton", base)

@@ -1,13 +1,32 @@
 extends Node
 
-# Silnik narracji. Domyślnie działa w trybie OFFLINE (darmowym): składa sceny
-# proceduralnie ze słownictwa profilu gatunkowego, dorzucając rzut kością, który
-# nadaje działaniom stawkę. Opcjonalnie potrafi rozmawiać z lokalnym modelem
-# językowym (Ollama) w trybie ONLINE — jeśli jest dostępny, inaczej cichy fallback.
+# Silnik narracji. W trybie OFFLINE (demonstracyjnym) składa sceny proceduralnie
+# ze słownictwa profilu gatunkowego, dorzucając rzut kością, który nadaje
+# działaniom stawkę. W trybie Mistrza Gry rozmawia z Claude API albo z lokalną
+# Ollamą.
+#
+# Gdy Mistrz Gry zawiedzie, funkcje zwracają pusty string i zapisują powód
+# w `last_error`. NIE ma tu cichego przejścia na narrację proceduralną: tura
+# po prostu się nie odbywa, a gracz ponawia. Podstawianie generatora w środku
+# kampanii AI wprowadzało do Kroniki nazwy, których nikt nie wymyślił.
 
 signal ai_state(available: bool, note: String)
 
 var _http: HTTPRequest
+
+# Powód ostatniej nieudanej odpowiedzi Mistrza Gry. Trzymamy go osobno, bo sam
+# sygnał bywa emitowany, zanim ekran gry zdąży się na niego zapisać — tak było
+# przy scenie otwierającej, przez co gracz nie widział żadnego komunikatu.
+var last_error := ""
+
+func _fail(note: String) -> String:
+	last_error = note
+	emit_signal("ai_state", false, note)
+	return ""
+
+func _ok(note: String) -> void:
+	last_error = ""
+	emit_signal("ai_state", true, note)
 
 # Słowa kluczowe klasyfikujące swobodny opis akcji gracza.
 const LOOK := ["rozglą", "obserw", "szuka", "badam", "sprawdz", "przygląd", "nasłuch",
@@ -221,7 +240,13 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 	var canon: Array = []
 	if not Game.npcs.is_empty():
 		var known: Array = []
-		for n in Game.npcs.slice(0, 14):
+		# Liczy się świeżość, nie kolejność poznania. Przy trzydziestu postaciach
+		# pierwszych czternastu to zwykle statyści z prologu, a nowo poznany
+		# przeciwnik w ogóle nie trafiłby do kanonu.
+		var ranked := Game.npcs.duplicate()
+		ranked.sort_custom(func(a, b):
+			return int(a.get("ostatnio", a.get("tura", 0))) > int(b.get("ostatnio", b.get("tura", 0))))
+		for n in ranked.slice(0, 14):
 			var who := str(n.get("imie", ""))
 			var role := str(n.get("rola", "")).strip_edges()
 			var rel := str(n.get("relacja", "")).strip_edges()
@@ -241,7 +266,10 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 		canon.append("· Miejsca: " + "; ".join(locs))
 	if not Game.discoveries.is_empty():
 		var ds: Array = []
-		for d in Game.discoveries.slice(0, 14):
+		var found := Game.discoveries.duplicate()
+		found.sort_custom(func(a, b):
+			return int(a.get("tura", 0)) > int(b.get("tura", 0)))
+		for d in found.slice(0, 14):
 			ds.append(str(d.get("title", "")))
 		canon.append("· Przedmioty i odkrycia: " + "; ".join(ds))
 	var qs: Array = []
@@ -263,8 +291,12 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 			key_facts.append("· [tura %d] %s" % [int(f.get("tura", 0)), str(f.get("tresc", ""))])
 		else:
 			recent.append("· [tura %d] %s" % [int(f.get("tura", 0)), str(f.get("tresc", ""))])
-	if key_facts.size() > 20:
-		key_facts = key_facts.slice(key_facts.size() - 20)
+	# Gdy faktów kluczowych zrobi się bardzo dużo, samo obcięcie do „ostatnich N”
+	# wyrzuciłoby założenia całej kampanii — a to zwykle one padają najwcześniej
+	# (kim naprawdę jest bohater, o co toczy się gra). Zostawiamy więc oba końce:
+	# najstarsze fundamenty i najświeższe zwroty akcji.
+	if key_facts.size() > 24:
+		key_facts = key_facts.slice(0, 8) + key_facts.slice(key_facts.size() - 16)
 	if recent.size() > 10:
 		recent = recent.slice(recent.size() - 10)
 	if not key_facts.is_empty() or not recent.is_empty():
@@ -288,7 +320,7 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 	lines.append("- hp: zmiana Zdrowia gracza w tej turze (ujemna przy obrażeniach; zwykle 0).")
 	lines.append("- mana: zmiana Many gracza (ujemna przy użyciu mocy%s)." % ("" if has_mana else "; w tym świecie zawsze 0"))
 	lines.append("- pd: punkty doświadczenia za tę turę — 5–15 za zwykłe działania, do 30 za brawurowe, sprytne lub przełomowe.")
-	lines.append("- podpowiedzi: dokładnie 3 krótkie (do 8 słów) propozycje następnego ruchu gracza, w trybie rozkazującym, ściśle wynikające z bieżącej sceny — sensowne, różnorodne opcje, nie oczywistości.")
+	lines.append("- podpowiedzi: dokładnie 3 bardzo krótkie (najwyżej 5 słów, do 30 znaków) propozycje następnego ruchu gracza, w trybie rozkazującym, ściśle wynikające z bieżącej sceny — sensowne, różnorodne opcje, nie oczywistości.")
 	return "\n".join(lines)
 
 # Wycina blok ###STAN z odpowiedzi modelu. Model bywa nieposłuszny: potrafi
@@ -387,8 +419,7 @@ func roll_instruction(roll: Dictionary) -> String:
 func _claude_request(system: String, messages: Array) -> String:
 	var key := str(Game.settings.get("claude_api_key", "")).strip_edges()
 	if key == "":
-		emit_signal("ai_state", false, "Brak klucza Claude API — wpisz go w Ustawieniach. Gram w trybie offline.")
-		return ""
+		return _fail("Brak klucza Claude API — wpisz go w Ustawieniach.")
 	var payload := {
 		"model": str(Game.settings.get("claude_model", "claude-opus-5")),
 		"max_tokens": 2048,
@@ -416,36 +447,32 @@ func _claude_request(system: String, messages: Array) -> String:
 		headers.append("Authorization: Bearer " + key)
 	var err := _http.request(base + "/v1/messages", headers, HTTPClient.METHOD_POST, JSON.stringify(payload))
 	if err != OK:
-		emit_signal("ai_state", false, "Nie udało się połączyć z Claude API — tryb offline.")
-		return ""
+		return _fail("Nie udało się wysłać zapytania do Claude API — sprawdź adres w Ustawieniach.")
 	var res: Array = await _http.request_completed
 	var code := int(res[1])
 	var body := (res[3] as PackedByteArray).get_string_from_utf8()
 	if code == 401:
-		emit_signal("ai_state", false, "Claude API odrzuciło klucz (401) — sprawdź go w Ustawieniach.")
-		return ""
+		return _fail("Claude API odrzuciło klucz (401) — sprawdź go w Ustawieniach.")
 	if code == 429:
-		emit_signal("ai_state", false, "Limit zapytań Claude API (429) — spróbuj za chwilę.")
-		return ""
+		return _fail("Limit zapytań Claude API (429) — odczekaj chwilę i ponów turę.")
 	if code != 200:
-		emit_signal("ai_state", false, "Claude API zwróciło błąd %d — tryb offline." % code)
-		return ""
+		return _fail("Claude API zwróciło błąd %d — tura nie została rozegrana." % code)
 	var parsed = JSON.parse_string(body)
 	if typeof(parsed) != TYPE_DICTIONARY:
-		emit_signal("ai_state", false, "Nieczytelna odpowiedź Claude API — tryb offline.")
-		return ""
+		return _fail("Nieczytelna odpowiedź Claude API — tura nie została rozegrana.")
 	if str(parsed.get("stop_reason", "")) == "max_tokens":
-		emit_signal("ai_state", false, "Odpowiedź Mistrza Gry urwała się na limicie długości.")
+		last_error = "Odpowiedź Mistrza Gry urwała się na limicie długości."
+		emit_signal("ai_state", false, last_error)
 	if str(parsed.get("stop_reason", "")) == "refusal":
-		emit_signal("ai_state", false, "Model odmówił odpowiedzi na tę akcję — tryb offline dla tej tury.")
-		return ""
+		return _fail("Model odmówił odpowiedzi na tę akcję — spróbuj opisać ją inaczej.")
 	var out := ""
 	for block in parsed.get("content", []):
 		if typeof(block) == TYPE_DICTIONARY and block.get("type") == "text":
 			out += str(block.get("text", ""))
 	out = out.strip_edges()
-	if out != "":
-		emit_signal("ai_state", true, "Mistrz Gry: Claude (chmura)")
+	if out == "":
+		return _fail("Claude API odesłało pustą odpowiedź — tura nie została rozegrana.")
+	_ok("Mistrz Gry: Claude (chmura)")
 	return out
 
 # ——— Test połączenia z Claude API (tylko wersja deweloperska) ————————
@@ -534,15 +561,12 @@ func _ollama_request(system: String, messages: Array) -> String:
 	var err := _http.request(host.rstrip("/") + "/api/generate",
 		["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(payload))
 	if err != OK:
-		emit_signal("ai_state", false, "Nie udało się połączyć z Ollamą — tryb offline.")
-		return ""
+		return _fail("Nie udało się połączyć z Ollamą — sprawdź, czy działa.")
 	var res: Array = await _http.request_completed
 	if int(res[1]) != 200:
-		emit_signal("ai_state", false, "Ollama zwróciła błąd %d — tryb offline." % int(res[1]))
-		return ""
+		return _fail("Ollama zwróciła błąd %d — tura nie została rozegrana." % int(res[1]))
 	var parsed = JSON.parse_string((res[3] as PackedByteArray).get_string_from_utf8())
 	if typeof(parsed) == TYPE_DICTIONARY and parsed.has("response"):
-		emit_signal("ai_state", true, "Mistrz Gry: %s (lokalnie)" % model)
+		_ok("Mistrz Gry: %s (lokalnie)" % model)
 		return str(parsed["response"]).strip_edges()
-	emit_signal("ai_state", false, "Nieczytelna odpowiedź Ollamy — tryb offline.")
-	return ""
+	return _fail("Nieczytelna odpowiedź Ollamy — tura nie została rozegrana.")

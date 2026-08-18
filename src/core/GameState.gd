@@ -4,6 +4,14 @@ extends Node
 # przebieg narracji oraz ustawienia. Autoload dostępny globalnie jako `Game`.
 
 signal chronicle_changed
+# Tura, której nie udało się rozegrać (awaria Mistrza Gry). Świat zostaje
+# nietknięty, a ekran gry prosi o ponowienie.
+signal turn_failed(reason: String)
+
+# Skąd wzięła się treść tury. Rozróżnienie jest istotne: przy AI nie wolno
+# uzupełniać Kroniki słownikowym zgadywaniem, bo atrapy trafiłyby potem do
+# modelu jako obowiązujący kanon nazw.
+enum Turn { OFFLINE, AI_PELNA, AI_BEZ_STANU }
 
 var router: Node          # ustawiane przez Router.gd, do przełączania ekranów
 
@@ -162,7 +170,9 @@ func new_world() -> void:
 	character = {}
 
 # Korutyna: w trybie Mistrza Gry czeka na pierwszą scenę. Wywołuj przez await.
-func begin_adventure() -> void:
+# Zwraca false, gdy Mistrz Gry nie odpowiedział — wtedy opowieść się NIE zaczyna
+# i gracz może ponowić zamiast dostać po cichu narrację proceduralną.
+func begin_adventure() -> bool:
 	# Ustala ziarno na podstawie świata — ta sama opowieść jest odtwarzalna.
 	var basis := "%s|%s|%s" % [world.get("name", ""), world.get("genre_key", ""), Time.get_unix_time_from_system()]
 	seed_value = hash(basis)
@@ -204,54 +214,66 @@ func begin_adventure() -> void:
 	var opening := ""
 	var raw := ""
 	if Narrator.ai_enabled():
-		raw = await Narrator.ai_generate(world, character, history, {})
-		if raw != "":
-			var pr := Narrator.parse_state(raw)
-			opening = str(pr["text"])
-			var st: Dictionary = pr["state"]
-			_merge_npcs(st.get("postacie", []))
-			_set_suggestions(st.get("podpowiedzi", []))
-			_set_summary(st.get("streszczenie", ""))
-	if opening == "":
+		raw = (await Narrator.ai_generate(world, character, history, {})).strip_edges()
+		if raw == "":
+			started = false
+			return false
+		var pr := Narrator.parse_state(raw)
+		opening = str(pr["text"])
+		if opening == "":
+			opening = raw
+		apply_state(pr["state"])
+	else:
 		opening = Narrator.opening(world, character, prof, rng)
-		raw = ""
 	var first := {"role": "narrator", "text": opening}
 	if raw != "":
 		first["raw"] = raw
 	history.append(first)
 	emit_signal("chronicle_changed")
+	return true
 
 # Wykonuje ruch gracza. Korutyna: w trybie AI czeka na model, w offline zwraca od razu.
 func take_action(action: String) -> void:
 	action = action.strip_edges()
-	if action == "":
+	if action == "" or bool(character.get("dead", false)):
 		return
-	turn += 1
-	history.append({"role": "player", "text": action})
 
 	var prof := profile()
-	var text := ""
-	var state := {}
-
 	# Rzut zapada PRZED narracją i obowiązuje w obu trybach — to gra rozstrzyga
 	# próbę, a Mistrz Gry (także AI) tylko opisuje jej skutek.
 	var roll := {}
 	if _should_roll(action):
 		roll = Narrator.roll_action(rng, _attr_modifier(action))
 
-	var raw := ""
-	if Narrator.ai_enabled():
-		# Akcja gracza jest już ostatnim wpisem historii.
-		raw = await Narrator.ai_generate(world, character, history, roll)
-		if raw != "":
-			var pr := Narrator.parse_state(raw)
-			text = str(pr["text"])
-			state = pr["state"]
+	# Akcja wchodzi do historii przed zapytaniem, bo model musi ją zobaczyć.
+	turn += 1
+	history.append({"role": "player", "text": action})
 
-	if text == "":
-		# Tryb offline (także fallback, gdy AI zawiedzie).
+	var text := ""
+	var raw := ""
+	var state := {}
+	var outcome: int = Turn.OFFLINE
+
+	if Narrator.ai_enabled():
+		raw = (await Narrator.ai_generate(world, character, history, roll)).strip_edges()
+		if raw == "":
+			# Awaria Mistrza Gry: limit zapytań, zerwane łącze, odmowa modelu.
+			# NIE podstawiamy narracji proceduralnej — jedna taka „zastępcza”
+			# tura potrafi wprowadzić do kanonu kampanii nazwy, których nikt
+			# nie wymyślił. Tura się nie odbyła: świat i licznik wracają
+			# do stanu sprzed akcji, a gracz ponawia.
+			history.pop_back()
+			turn -= 1
+			emit_signal("turn_failed", Narrator.last_error)
+			return
+		var pr := Narrator.parse_state(raw)
+		text = str(pr["text"])
+		state = pr["state"]
+		outcome = Turn.AI_PELNA if not state.is_empty() else Turn.AI_BEZ_STANU
+		if text == "":
+			text = raw     # model odesłał sam blok stanu — lepsze to niż pustka
+	else:
 		text = Narrator.respond(world, character, prof, action, roll, rng)
-		raw = ""
 
 	var entry := {"role": "narrator", "text": text}
 	# Oryginał z blokiem stanu zostaje w kronice — model musi widzieć własne
@@ -261,21 +283,38 @@ func take_action(action: String) -> void:
 	if not roll.is_empty():
 		entry["roll"] = roll
 	history.append(entry)
-	# Kronikę wypełnia Mistrz Gry własnymi nazwami. Słownikowe zgadywanie
-	# („Klucz / kod dostępu”, „Kawiarnia”) zostaje tylko dla trybu offline —
-	# w trybie AI wstawiałoby do Kroniki atrapy zamiast prawdziwych faktów,
-	# a te wracałyby potem do modelu jako obowiązujący kanon nazw.
-	if state.is_empty():
+
+	# Słownikowe zgadywanie nazw („Klucz / kod dostępu”, „Kawiarnia”) ma sens
+	# wyłącznie wtedy, gdy narrację napisał generator proceduralny. Gdy pisał ją
+	# model — nawet jeśli zepsuł blok stanu — atrapy zanieczyściłyby kanon nazw,
+	# po który model sięga w każdej kolejnej turze.
+	if outcome == Turn.OFFLINE:
 		_update_memory(action, text)
-	_apply_turn_effects(action, roll, state)
+	_apply_turn_effects(action, roll, state, outcome == Turn.OFFLINE)
 	emit_signal("chronicle_changed")
 	# Autozapis co pięć tur — długiej rozgrywki nie wolno stracić.
 	if turn % 5 == 0:
 		Saves.save_current()
 
+# Wszystko, co Mistrz Gry zgłosił w bloku stanu, wchodzi do Kroniki jednym
+# wejściem. Dzięki temu scena otwierająca i kolejne tury nie rozjeżdżają się
+# zakresem — wcześniej otwarcie gubiło miejsca, odkrycia, wątki i fakty.
+func apply_state(st: Dictionary) -> void:
+	if st.is_empty():
+		return
+	_merge_npcs(st.get("postacie", []))
+	_set_suggestions(st.get("podpowiedzi", []))
+	_set_summary(st.get("streszczenie", ""))
+	_merge_locations(st.get("miejsca", []))
+	_merge_discoveries(st.get("odkrycia", []))
+	_merge_quests(st.get("watki", []))
+	_merge_facts(st.get("fakty", []))
+	_merge_events(st.get("wydarzenia", []))
+
 # ——— Efekty tury: zdrowie, mana, doświadczenie, biblioteka postaci ————
 
-func _apply_turn_effects(action: String, roll: Dictionary, state: Dictionary) -> void:
+func _apply_turn_effects(action: String, roll: Dictionary, state: Dictionary,
+		procedural := true) -> void:
 	ensure_character_stats()
 	var hp_delta := 0
 	var mana_delta := 0
@@ -286,14 +325,11 @@ func _apply_turn_effects(action: String, roll: Dictionary, state: Dictionary) ->
 		hp_delta = clampi(int(state.get("hp", 0)), -40, 25)
 		mana_delta = clampi(int(state.get("mana", 0)), -60, 25)
 		xp_gain = clampi(int(state.get("pd", 8)), 0, 40)
-		_merge_npcs(state.get("postacie", []))
-		_set_suggestions(state.get("podpowiedzi", []))
-		_set_summary(state.get("streszczenie", ""))
-		_merge_locations(state.get("miejsca", []))
-		_merge_discoveries(state.get("odkrycia", []))
-		_merge_quests(state.get("watki", []))
-		_merge_facts(state.get("fakty", []))
-		_merge_events(state.get("wydarzenia", []))
+		apply_state(state)
+	elif not procedural:
+		# Model napisał scenę, ale zepsuł blok stanu. Nie znamy skutków, więc
+		# dajemy samo doświadczenie i niczego nie zgadujemy o zdrowiu.
+		xp_gain = 8
 	else:
 		# Tryb offline: proste reguły.
 		xp_gain = 8
@@ -444,8 +480,9 @@ func _merge_facts(arr) -> void:
 			"waga": "kluczowy" if waga == "kluczowy" else "zwykly", "tura": turn})
 	_trim_facts()
 
-# Kronika nie może rosnąć bez końca. Fakty kluczowe zostają zawsze,
-# zwykłe wypadają od najstarszego.
+# Kronika nie może rosnąć bez końca. W zapisie fakty kluczowe zostają zawsze,
+# a zwykłe wypadają od najstarszego. Uwaga: to limit SKŁADOWANIA — o tym, ile
+# z nich trafia do modelu, decyduje osobno Narrator._gm_system.
 func _trim_facts() -> void:
 	if facts.size() <= 140:
 		return

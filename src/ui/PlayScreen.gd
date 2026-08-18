@@ -17,6 +17,8 @@ var _npcs: VBoxContainer
 var _status: Label
 var _title: Label
 var _busy := false
+var _pending := ""      # akcja czekająca na rozegranie — wraca do pola po awarii
+var _failed := false
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -24,7 +26,13 @@ func _ready() -> void:
 	_build_right()
 
 	Game.chronicle_changed.connect(_refresh)
+	Game.turn_failed.connect(_on_turn_failed)
 	Narrator.ai_state.connect(_on_ai_state)
+	# Scena otwierająca powstaje jeszcze w kreatorze postaci, więc komunikat
+	# o kłopotach z Mistrzem Gry nie miałby tu kogo powiadomić. Czytamy go
+	# z pamięci Narratora zamiast czekać na sygnał.
+	if Narrator.last_error != "":
+		_warn(Narrator.last_error)
 	_refresh()
 	_rebuild_suggestions()
 	_scroll_to_bottom()
@@ -59,7 +67,7 @@ func _build_left() -> void:
 	_log.scroll_active = false
 	_log.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_log.add_theme_constant_override("line_separation", 8)
+	_log.add_theme_constant_override("line_separation", 4)
 	sc.add_child(_log)
 
 	_hints_lbl = Ui.region(Ui.P_HINTS_L)
@@ -190,11 +198,16 @@ func _submit(text: String) -> void:
 	text = text.strip_edges()
 	if text == "":
 		return
+	_pending = text
+	_failed = false
 	_input.text = ""
 	_resize_input()
 	_set_busy(true)
 	await Game.take_action(text)
 	_set_busy(false)
+	if _failed:
+		return          # świat nietknięty, tekst wrócił do pola
+	_pending = ""
 	_render_log()
 	_rebuild_suggestions()
 	_scroll_to_bottom()
@@ -204,12 +217,31 @@ func _set_busy(b: bool) -> void:
 	var dead := bool(Game.character.get("dead", false))
 	_send.disabled = b or dead
 	_input.editable = not b and not dead
+	if _failed:
+		return          # nie zamazuj powodu awarii
 	if dead:
 		_status.text = "Kronika dobiegła końca"
 	elif b and Narrator.ai_enabled():
 		_status.text = "Mistrz Gry myśli…"
 	else:
 		_status.text = _mode_note()
+	_status.add_theme_color_override("font_color", Ui.MUTED)
+
+# Tura się nie odbyła. Oddajemy graczowi jego tekst i mówimy, co poszło nie tak
+# — zamiast po cichu podstawiać narrację proceduralną i psuć kanon kampanii.
+func _on_turn_failed(reason: String) -> void:
+	_failed = true
+	if _pending != "":
+		_input.text = _pending
+		_resize_input()
+	_warn(reason if reason.strip_edges() != "" else "Nie udało się rozegrać tury — spróbuj ponownie.")
+
+func _warn(note: String) -> void:
+	if not is_instance_valid(_status):
+		return
+	_status.text = note
+	_status.add_theme_color_override("font_color", Ui.OXIDE)
+	_status.tooltip_text = note
 
 func _render_log() -> void:
 	var out := ""
@@ -535,9 +567,15 @@ func _on_save() -> void:
 	if is_instance_valid(_status):
 		_status.text = _mode_note()
 
-func _on_ai_state(_available: bool, note: String) -> void:
-	if is_instance_valid(_status) and not _busy:
+func _on_ai_state(available: bool, note: String) -> void:
+	if not is_instance_valid(_status) or _busy:
+		return
+	if available:
+		_failed = false
 		_status.text = note
+		_status.add_theme_color_override("font_color", Ui.MUTED)
+	else:
+		_warn(note)
 
 func _mode_note() -> String:
 	match Narrator.provider():

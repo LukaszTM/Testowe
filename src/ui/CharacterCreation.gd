@@ -12,6 +12,7 @@ var _avatar_path := ""
 var _avatar_slot: HBoxContainer
 var _fd: FileDialog
 var _start_btn: Button
+var _error_lbl: Label
 
 const TRAITS := ["nieufny", "honorowy", "porywczy", "wyrachowany", "lojalny", "cyniczny",
 	"ciekawski", "opanowany", "brawurowy", "skryty", "uparty", "ironiczny"]
@@ -109,6 +110,17 @@ func _ready() -> void:
 	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	back.pressed.connect(func(): Game.router.goto("world"))
 	row.add_child(back)
+
+	# Miejsce na powód, dla którego Mistrz Gry nie napisał pierwszej sceny.
+	var eh := Ui.region(Rect2(228, 668, 546, 40))
+	add_child(eh)
+	_error_lbl = Ui.subtle("", 14)
+	_error_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_error_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_error_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_error_lbl.add_theme_color_override("font_color", Ui.OXIDE)
+	_error_lbl.max_lines_visible = 2
+	eh.add_child(_error_lbl)
 
 	_start_btn = Ui.button("Rozpocznij opowieść", true)
 	_start_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -252,9 +264,22 @@ func _start() -> void:
 	c["avatar"] = _avatar_path
 	Game.character = c
 	# Pierwszą scenę pisze Mistrz Gry — to zapytanie do modelu, więc trwa chwilę.
-	if _start_btn:
+	if is_instance_valid(_start_btn):
 		_start_btn.disabled = true
 		_start_btn.text = "Mistrz Gry pisze pierwszą scenę…"
-	await Game.begin_adventure()
-	if is_instance_valid(self):
-		Game.router.goto("play")
+	if is_instance_valid(_error_lbl):
+		_error_lbl.text = ""
+	var started: bool = await Game.begin_adventure()
+	if not is_instance_valid(self):
+		return
+	if not started:
+		# Opowieść się nie zaczęła — lepsze to niż wpuszczenie gracza w kampanię
+		# prowadzoną po cichu przez generator proceduralny.
+		if is_instance_valid(_start_btn):
+			_start_btn.disabled = false
+			_start_btn.text = "Rozpocznij opowieść"
+		if is_instance_valid(_error_lbl):
+			var why := Narrator.last_error
+			_error_lbl.text = why if why.strip_edges() != "" else "Mistrz Gry nie odpowiedział — spróbuj ponownie."
+		return
+	Game.router.goto("play")

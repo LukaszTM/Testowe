@@ -34,6 +34,8 @@ func _run() -> void:
 	_test_migration()
 	_test_progression()
 	_test_chronicle_merge()
+	_test_state_block()
+	_test_prompt_memory()
 	print("\n=== %d przeszło, %d nie przeszło ===" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)
 
@@ -251,3 +253,82 @@ func _test_chronicle_merge() -> void:
 	Game._merge_quests([{"tytul": "Kto wysłał list", "stan": "zamknięty"}])
 	eq("wątek nie zdublowany", Game.quests.size(), 1)
 	eq("wątek zamknięty", str(Game.quests[0].get("status", "")), "zamknięty")
+
+# ——— Pełny blok stanu ————————————————————————————————————————
+# Scena otwierająca gubiła kiedyś miejsca, odkrycia, wątki, fakty i wydarzenia,
+# bo scalała tylko trzy pola. Teraz oba wejścia idą przez apply_state.
+
+func _test_state_block() -> void:
+	print("\nPełny blok stanu")
+	Game.npcs = []
+	Game.locations = []
+	Game.discoveries = []
+	Game.quests = []
+	Game.facts = []
+	Game.events = []
+	Game.suggestions = []
+	Game.summary = ""
+	Game.turn = 1
+	Game.character = {"name": "Halina"}
+
+	Game.apply_state({
+		"streszczenie": "Halina dotarła do Kazimierza Dolnego.",
+		"postacie": [{"imie": "Wójt Bąk", "plec": "mężczyzna", "rola": "wójt",
+			"relacja": "wymijający", "stan": "żywy"}],
+		"miejsca": [{"nazwa": "Kazimierz Dolny", "opis": "miasteczko nad Wisłą"}],
+		"odkrycia": [{"nazwa": "Pieczęć na liście", "rodzaj": "Trop", "opis": "herb wójta"}],
+		"watki": [{"tytul": "Kto podpisał list", "stan": "otwarty"}],
+		"fakty": [{"tresc": "Wójt Bąk zna nadawcę listu.", "waga": "kluczowy"}],
+		"wydarzenia": [{"opis": "Halina rozpoznała pieczęć."}],
+		"podpowiedzi": ["Zapytaj wójta", "Obejrzyj pieczęć", "Wróć na rynek"],
+	})
+
+	eq("streszczenie zapisane", Game.summary, "Halina dotarła do Kazimierza Dolnego.")
+	eq("postać zapisana", Game.npcs.size(), 1)
+	eq("miejsce zapisane", Game.locations.size(), 1)
+	eq("odkrycie zapisane", Game.discoveries.size(), 1)
+	eq("wątek zapisany", Game.quests.size(), 1)
+	eq("fakt zapisany", Game.facts.size(), 1)
+	eq("wydarzenie zapisane", Game.events.size(), 1)
+	eq("podpowiedzi zapisane", Game.suggestions.size(), 3)
+	eq("nazwa miejsca dokładna", str(Game.locations[0].get("name", "")), "Kazimierz Dolny")
+
+	# Pusty blok nie może niczego wyczyścić ani dopisać.
+	Game.apply_state({})
+	eq("pusty blok nic nie zmienia", Game.facts.size(), 1)
+
+# ——— Wybór pamięci do promptu ————————————————————————————————
+# Kanon brał pierwszych 14 poznanych postaci, więc świeżo poznany przeciwnik
+# mógł się w nim w ogóle nie znaleźć.
+
+func _test_prompt_memory() -> void:
+	print("\nWybór pamięci do promptu")
+	Game.world = {"name": "Świat", "genre_key": "fantasy", "supernatural": "brak"}
+	Game.character = {"name": "Bohater", "gender": "Mężczyzna"}
+	Game.ensure_character_stats()
+	Game.locations = []
+	Game.discoveries = []
+	Game.quests = []
+	Game.events = []
+	Game.summary = ""
+	Game.turn = 40
+
+	Game.npcs = []
+	for i in range(20):
+		Game.npcs.append({"imie": "Statysta%02d" % i, "rola": "przechodzień",
+			"relacja": "obojętny", "stan": "żywy", "tura": i, "ostatnio": i})
+	Game.npcs.append({"imie": "Nemezis", "rola": "łowca", "relacja": "wrogi",
+		"stan": "żywy", "tura": 39, "ostatnio": 39})
+
+	var prompt: String = Narrator._gm_system(Game.world, Game.character)
+	check("świeżo poznana postać jest w kanonie", prompt.contains("Nemezis"))
+	check("najstarsi statyści wypadli z kanonu", not prompt.contains("Statysta00"))
+
+	# Fakty kluczowe: fundament kampanii nie może wypaść przy nadmiarze.
+	Game.facts = []
+	Game.facts.append({"tresc": "Bohater jest synem króla.", "waga": "kluczowy", "tura": 4})
+	for i in range(30):
+		Game.facts.append({"tresc": "Zwrot akcji numer %d." % i, "waga": "kluczowy", "tura": 10 + i})
+	prompt = Narrator._gm_system(Game.world, Game.character)
+	check("najstarszy fakt kluczowy zostaje w pamięci", prompt.contains("synem króla"))
+	check("najnowszy fakt kluczowy zostaje w pamięci", prompt.contains("Zwrot akcji numer 29"))

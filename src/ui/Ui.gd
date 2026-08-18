@@ -34,9 +34,10 @@ const P_BOX3    := Rect2(1190, 442, 230, 148)  # postacie
 const P_BOX4    := Rect2(906, 654, 516, 110)   # stan i przyciski
 
 # ——— Paleta zdjęta z grafik ————————————————————————————————
-const INK         := Color("3b2c1c")   # tekst na pergaminie
-const INK_SOFT    := Color("58432c")   # tekst pomocniczy
-const MUTED       := Color("806a4c")
+const INK         := Color("33261a")   # tekst na pergaminie
+const INK_SOFT    := Color("4a3722")   # tekst pomocniczy
+const MUTED       := Color("6b573a")   # podpisy — ciemniejsze niż w makiecie,
+                                       # bo pergamin w grze jest mocno zacieniony
 const LINE        := Color("a98f66")   # cienkie linie
 const PANEL       := Color("d8c8a4")   # pergamin (gdy trzeba go domalować)
 const PANEL_HI    := Color("ece0c2")
@@ -164,6 +165,17 @@ static func _sb(fill: Color, radius := 6, border := 0, border_col := LINE, pad :
 		sb.border_color = border_col
 	return sb
 
+# Płaski kształt bez marginesów — do pasków przewijania i drobnych wypełnień.
+static func _flat(col: Color, radius := 4) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = col
+	sb.set_corner_radius_all(radius)
+	sb.content_margin_left = 0
+	sb.content_margin_right = 0
+	sb.content_margin_top = 0
+	sb.content_margin_bottom = 0
+	return sb
+
 const HOVER      := Color(1.12, 1.07, 0.95, 1.0)
 const PRESS      := Color(0.76, 0.70, 0.60, 1.0)
 const PRIMARY    := Color(1.16, 1.02, 0.66, 1.0)   # cieplejsze, „złote” okucie
@@ -251,6 +263,21 @@ static func build_theme() -> Theme:
 	t.set_stylebox("panel", "ScrollContainer", StyleBoxEmpty.new())
 	t.set_color("font_color", "CheckButton", INK)
 	t.set_font_size("font_size", "CheckButton", base)
+
+	# CheckBox dziedziczy style po Button, przez co przełączniki rysowały się
+	# jako pełne, ozdobne okucia. Zdejmujemy tło — zostaje znacznik i napis.
+	for st in ["normal", "hover", "pressed", "disabled", "focus", "hover_pressed"]:
+		t.set_stylebox(st, "CheckBox", StyleBoxEmpty.new())
+	t.set_color("font_color", "CheckBox", INK)
+	t.set_color("font_hover_color", "CheckBox", GOLD)
+	t.set_font_size("font_size", "CheckBox", base)
+
+	# Paski przewijania: domyślne, jasne paski Godota odcinały się od księgi.
+	for bar in ["VScrollBar", "HScrollBar"]:
+		t.set_stylebox("scroll", bar, _flat(Color(0.30, 0.22, 0.11, 0.16), 4))
+		t.set_stylebox("grabber", bar, _flat(Color(0.54, 0.42, 0.20, 0.55), 4))
+		t.set_stylebox("grabber_highlight", bar, _flat(Color(0.66, 0.52, 0.24, 0.75), 4))
+		t.set_stylebox("grabber_pressed", bar, _flat(Color(0.72, 0.57, 0.26, 0.85), 4))
 	return t
 
 # ——— Fabryki kontrolek ———————————————————————————————————————
@@ -297,6 +324,18 @@ static func section(txt: String) -> Control:
 	box.add_child(l)
 	box.add_child(hsep())
 	return box
+
+# Podpis nad polem formularza. Wersaliki bladym kolorem znikały na pergaminie,
+# więc idzie tu krój Medium i mocniejszy atrament.
+static func field_label(txt: String) -> Label:
+	_load_fonts()
+	var l := Label.new()
+	l.text = txt.to_upper()
+	if _f_medium:
+		l.add_theme_font_override("font", _f_medium)
+	l.add_theme_font_size_override("font_size", fs(15))
+	l.add_theme_color_override("font_color", INK_SOFT)
+	return l
 
 static func subtle(txt: String, size := 15) -> Label:
 	var l := Label.new()
@@ -345,10 +384,10 @@ static func chip_button(txt: String) -> Button:
 	var b := Button.new()
 	b.text = txt
 	b.custom_minimum_size = Vector2(0, 62)
-	b.add_theme_stylebox_override("normal", _sbt("btn_med", 71, 25, 16, 4))
-	b.add_theme_stylebox_override("hover", _sbt("btn_med_hover", 71, 25, 16, 4))
-	b.add_theme_stylebox_override("pressed", _sbt("btn_med_down", 71, 25, 16, 4))
-	b.add_theme_font_size_override("font_size", fs(15))
+	b.add_theme_stylebox_override("normal", _sbt("btn_med", 71, 25, 30, 4))
+	b.add_theme_stylebox_override("hover", _sbt("btn_med_hover", 71, 25, 30, 4))
+	b.add_theme_stylebox_override("pressed", _sbt("btn_med_down", 71, 25, 30, 4))
+	b.add_theme_font_size_override("font_size", fs(14))
 	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	b.pressed.connect(func(): Audio.click())
 	return b
@@ -356,7 +395,7 @@ static func chip_button(txt: String) -> Button:
 static func field(label_txt: String, placeholder := "", initial := "") -> Dictionary:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
-	box.add_child(subtle(label_txt.to_upper(), 14))
+	box.add_child(field_label(label_txt))
 	var le := LineEdit.new()
 	le.placeholder_text = placeholder
 	le.text = initial
@@ -366,7 +405,7 @@ static func field(label_txt: String, placeholder := "", initial := "") -> Dictio
 static func text_field(label_txt: String, placeholder := "", min_h := 90) -> Dictionary:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
-	box.add_child(subtle(label_txt.to_upper(), 14))
+	box.add_child(field_label(label_txt))
 	var te := TextEdit.new()
 	te.placeholder_text = placeholder
 	te.custom_minimum_size = Vector2(0, min_h)
@@ -377,7 +416,7 @@ static func text_field(label_txt: String, placeholder := "", min_h := 90) -> Dic
 static func dropdown(label_txt: String, options: Array) -> Dictionary:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
-	box.add_child(subtle(label_txt.to_upper(), 14))
+	box.add_child(field_label(label_txt))
 	var ob := OptionButton.new()
 	ob.custom_minimum_size = Vector2(0, 50)
 	for o in options:
@@ -450,10 +489,12 @@ static func add_corners(_p: Control, _size := 76) -> void:
 static func medallion(display_name: String, size := 44) -> Control:
 	_load_fonts()
 	var h := absi(hash(display_name.to_lower()))
-	var hue := float(h % 360) / 360.0
+	# Odcień z wąskiego, ciepłego zakresu — losowa barwa z całego koła potrafiła
+	# dać zimny błękit, który odbijał od sepii księgi.
+	var hue := 0.045 + float(h % 100) / 100.0 * 0.075
 	var p := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color.from_hsv(hue, 0.30, 0.30)
+	sb.bg_color = Color.from_hsv(hue, 0.34, 0.30 + float((h / 100) % 10) * 0.012)
 	sb.set_corner_radius_all(size)
 	sb.set_border_width_all(2)
 	sb.border_color = GOLD

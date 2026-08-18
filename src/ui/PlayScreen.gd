@@ -27,7 +27,11 @@ func _ready() -> void:
 	Narrator.ai_state.connect(_on_ai_state)
 	_refresh()
 	_rebuild_suggestions()
-	_scroll_to_bottom()
+	# Świeża kronika ma tylko scenę otwierającą — zostaje na górze karty,
+	# żeby iluminowany inicjał nie uciekał za górną krawędź. Wczytany zapis
+	# przewija się na koniec, do miejsca przerwania gry.
+	if Game.history.size() > 1:
+		_scroll_to_bottom()
 
 # ——— Lewa karta: tytuł, narracja, podpowiedzi, pole polecenia ————————
 

@@ -12,12 +12,15 @@ const REF := Vector2(1672, 941)
 # ——— Obszary na płycie „menu” (menu i ekrany formularzy) ——————————
 # Lewa karta ma u góry różę wiatrów, u dołu panoramę miasta — tekst siada
 # pomiędzy nimi. Prawa karta jest pusta.
-const M_TITLE   := Rect2(228, 288, 548, 150)   # kaligraficzny tytuł gry
-const M_MOTTO   := Rect2(228, 448, 548, 64)    # dewiza pod tytułem
+# Uwaga: pergamin lewej karty zaczyna się dopiero za skórzanym grzbietem
+# i kwiatową bordiurą (ok. x=320) — tekst położony bliżej ginie w ciemnej
+# oprawie, więc obszary trzymają się czystej części karty.
+const M_TITLE   := Rect2(300, 288, 460, 150)   # kaligraficzny tytuł gry
+const M_MOTTO   := Rect2(300, 448, 460, 64)    # dewiza pod tytułem
 const M_BUTTONS := Rect2(900, 186, 456, 508)   # kolumna przycisków menu
-const M_HEAD    := Rect2(230, 104, 546, 52)    # nagłówek ekranu
-const M_BODY    := Rect2(228, 168, 546, 534)   # treść formularza
-const M_ACTIONS := Rect2(228, 712, 546, 72)    # listwa akcji
+const M_HEAD    := Rect2(320, 110, 440, 52)    # nagłówek ekranu
+const M_BODY    := Rect2(320, 174, 440, 528)   # treść formularza
+const M_ACTIONS := Rect2(316, 712, 448, 72)    # listwa akcji
 const M_HINTS   := Rect2(890, 150, 470, 560)   # objaśnienia na prawej karcie
 
 # ——— Obszary na płycie „rozgrywka” ————————————————————————————
@@ -231,14 +234,11 @@ static func build_theme() -> Theme:
 		t.set_font("bold_font", "RichTextLabel", _f_bold)
 
 	# Suwak: tor to rama paska, gałka wycięta z grafiki suwaka z paczki.
-	t.set_stylebox("slider", "HSlider", _sbt("bar_frame", 34, 0, 0, 23))
-	var grab := StyleBoxFlat.new()
-	grab.bg_color = Color("a8842e")
-	grab.set_corner_radius_all(7)
-	grab.content_margin_left = 0
-	grab.content_margin_right = 0
-	grab.content_margin_top = 7
-	grab.content_margin_bottom = 7
+	# Marginesy treści toru trzymają gałkę z dala od ozdobnych końcówek ramy.
+	t.set_stylebox("slider", "HSlider", _sbt("bar_frame", 34, 0, 20, 23))
+	# Wypełnienie za gałką to złoty pasek z tej samej makiety co rama —
+	# płaski prostokąt malowany na całej wysokości zasłaniał okucia ramy.
+	var grab := _sbt("bar_fill_gold", 34, 0, 0, 23)
 	t.set_stylebox("grabber_area", "HSlider", grab)
 	t.set_stylebox("grabber_area_highlight", "HSlider", grab)
 	var knob := art("slider_knob")
@@ -298,6 +298,13 @@ static func section(txt: String) -> Control:
 	box.add_child(hsep())
 	return box
 
+# Etykieta pola formularza. Ciemniejsza niż subtle() — leży wprost na
+# zdobionym pergaminie, gdzie wyblakły tusz ginie w rysunku tła.
+static func form_label(txt: String, size := 14) -> Label:
+	var l := subtle(txt.to_upper(), size)
+	l.add_theme_color_override("font_color", INK_SOFT)
+	return l
+
 static func subtle(txt: String, size := 15) -> Label:
 	var l := Label.new()
 	l.text = txt
@@ -356,7 +363,7 @@ static func chip_button(txt: String) -> Button:
 static func field(label_txt: String, placeholder := "", initial := "") -> Dictionary:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
-	box.add_child(subtle(label_txt.to_upper(), 14))
+	box.add_child(form_label(label_txt))
 	var le := LineEdit.new()
 	le.placeholder_text = placeholder
 	le.text = initial
@@ -366,7 +373,7 @@ static func field(label_txt: String, placeholder := "", initial := "") -> Dictio
 static func text_field(label_txt: String, placeholder := "", min_h := 90) -> Dictionary:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
-	box.add_child(subtle(label_txt.to_upper(), 14))
+	box.add_child(form_label(label_txt))
 	var te := TextEdit.new()
 	te.placeholder_text = placeholder
 	te.custom_minimum_size = Vector2(0, min_h)
@@ -377,7 +384,7 @@ static func text_field(label_txt: String, placeholder := "", min_h := 90) -> Dic
 static func dropdown(label_txt: String, options: Array) -> Dictionary:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
-	box.add_child(subtle(label_txt.to_upper(), 14))
+	box.add_child(form_label(label_txt))
 	var ob := OptionButton.new()
 	ob.custom_minimum_size = Vector2(0, 50)
 	for o in options:

@@ -67,27 +67,30 @@ func _pick(rng: RandomNumberGenerator, pool: Array) -> String:
 		return ""
 	return pool[rng.randi_range(0, pool.size() - 1)]
 
-# Scena otwierająca — offline.
+# Scena otwierająca — offline. Miejsce startu i tajemnica świata to gotowe
+# frazy w mianowniku, więc wchodzą do tekstu jako osobne zdania — doklejanie
+# ich w środek zdania brzmiało jak wypełnianie formularza.
 func opening(world: Dictionary, character: Dictionary, prof: Dictionary, rng: RandomNumberGenerator) -> String:
-	var loc := str(world.get("start_location", "")).strip_edges()
+	var loc := str(world.get("start_location", "")).strip_edges().rstrip(".")
 	if loc == "":
-		loc = prof["hub"]["name"]
+		loc = str(prof["hub"]["name"])
 	var tone := str(world.get("tone", "")).strip_edges()
 	if tone == "":
 		tone = "tajemniczy"
 	var when := _period(world)
+	var who := "bohaterką" if str(character.get("gender", "")) == "Kobieta" else "bohaterem"
 	var lines: Array = []
-	lines.append("%s stoi w miejscu, które nazwano tak: %s." % [character.get("name", "Bohater"), loc])
+	lines.append("%s. Właśnie tu zaczyna się opowieść, której %s jesteś ty — %s." % [
+		loc, who, character.get("name", "Bohater")])
 	lines.append(_pick(rng, prof["ambient"]))
-	var intro := "To początek opowieści w świecie „%s” (%s)%s. Ton jest %s." % [
-		world.get("name", "bez nazwy"), prof["label"], when, tone]
-	lines.append(intro)
-	var goal := str(character.get("goal", "")).strip_edges()
+	lines.append("Kronika świata „%s” otwiera się na pierwszej karcie%s. Ton tej opowieści jest %s." % [
+		world.get("name", "bez nazwy"), when, tone])
+	var goal := str(character.get("goal", "")).strip_edges().rstrip(".")
 	if goal != "":
-		lines.append("Kieruje tobą jedno: %s." % goal)
-	var mystery := str(world.get("mystery", "")).strip_edges()
+		lines.append("Przywiodło cię tutaj jedno: %s." % goal)
+	var mystery := str(world.get("mystery", "")).strip_edges().rstrip(".")
 	if mystery != "":
-		lines.append("Tuż obok pojawia się pierwszy szczegół, który może być tropem — jego cień pada wprost na główną tajemnicę: %s." % mystery)
+		lines.append("O jednym mówi się tu wyłącznie półgłosem. %s." % mystery)
 	lines.append(_pick(rng, Genres.CLOSERS))
 	return "\n\n".join(lines)
 
@@ -102,7 +105,10 @@ func respond(world: Dictionary, character: Dictionary, prof: Dictionary,
 	var body := _pick(rng, pool)
 	if body != "":
 		parts.append(body)
-	parts.append(_pick(rng, prof["ambient"]))
+	# Tło sceny tylko co którąś turę — powtarzane za każdym razem szybko
+	# zdradzało, że narracja składa się z tych samych klocków.
+	if rng.randf() < 0.5:
+		parts.append(_pick(rng, prof["ambient"]))
 	var out := " ".join(parts).strip_edges()
 	if out == "":
 		out = "%s działa dalej, a świat reaguje na ten ruch." % character.get("name", "Bohater")

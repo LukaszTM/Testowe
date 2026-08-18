@@ -81,7 +81,7 @@ func _ready() -> void:
 		Audio.apply_settings())
 	col.add_child(_music)
 
-	col.add_child(Ui.subtle("GŁOŚNOŚĆ MUZYKI", 14))
+	col.add_child(Ui.form_label("Głośność muzyki"))
 	var vrow := HBoxContainer.new()
 	vrow.add_theme_constant_override("separation", 14)
 	col.add_child(vrow)
@@ -128,7 +128,7 @@ func _ready() -> void:
 	col.add_child(Ui.hsep())
 
 	# ——— Tekst ———
-	col.add_child(Ui.subtle("WIELKOŚĆ TEKSTU", 13))
+	col.add_child(Ui.form_label("Wielkość tekstu", 13))
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 12)
 	col.add_child(srow)

@@ -47,6 +47,9 @@ var settings: Dictionary = {
 	"window_mode": "windowed",            # "windowed" / "borderless" / "fullscreen"
 	"sfx_on": true,
 	"music_on": true,
+	"intro_on": true,                     # animacja otwarcia księgi przy starcie
+	"intro_seconds": 1.6,                 # jak długo trwa otwarcie
+
 	"music_volume": 0.55,
 	"dice_mode": "risk",                  # "risk" / "always" / "off"
 }

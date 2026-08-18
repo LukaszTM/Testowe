@@ -37,6 +37,14 @@ func _ready() -> void:
 	goto("menu")
 	Audio.play_music()
 
+	# Otwarcie księgi gramy NA WIERZCHU gotowego już menu. Dzięki temu po
+	# ostatniej klatce nie ma ani przeskoku, ani doczytywania — animacja po
+	# prostu znika i odsłania ten sam kadr.
+	if bool(Game.settings.get("intro_on", true)) and Intro.available():
+		var intro := Intro.new()
+		intro.finished.connect(func(): intro.queue_free())
+		add_child(intro)
+
 func goto(screen: String, _arg = null) -> void:
 	if _current and is_instance_valid(_current):
 		_current.queue_free()

@@ -108,6 +108,21 @@ W menu **Ustawienia** można zmienić m.in.:
 - **rzuty kością** — tylko przy starciach i ryzyku (domyślnie), zawsze albo nigdy,
 - **wielkość tekstu**.
 
+## Animacja otwarcia księgi
+
+Przy starcie gra może odegrać animację otwierania księgi. Klatki wrzuca się do
+`assets/intro/` (`png`, `jpg` lub `webp`, sortowane po nazwie) — odtwarzacz sam
+je wykrywa, więc dołożenie klatki nie wymaga zmiany w kodzie. Pusty katalog
+oznacza start od razu w menu.
+
+Animacja gra **na wierzchu gotowego menu**, więc po ostatniej klatce nic się
+nie doczytuje. Warunek: ostatnia klatka musi być tym samym kadrem, co
+`assets/ui/plate_menu.png`. Włącznik i tempo (1,2 / 1,6 / 2,0 s) siedzą
+w Ustawieniach; animację można pominąć dowolnym klawiszem.
+
+Klatki wczytują się strumieniowo, kilka do przodu i w tle — czterdzieści
+kadrów pełnoekranowych trzymanych naraz zajęłoby ćwierć gigabajta pamięci.
+
 ## Testy
 
 Zestaw testów jednostkowych uruchamia się bez okna gry:

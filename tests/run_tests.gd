@@ -36,6 +36,7 @@ func _run() -> void:
 	_test_chronicle_merge()
 	_test_state_block()
 	_test_prompt_memory()
+	_test_intro()
 	print("\n=== %d przeszło, %d nie przeszło ===" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)
 
@@ -332,3 +333,23 @@ func _test_prompt_memory() -> void:
 	prompt = Narrator._gm_system(Game.world, Game.character)
 	check("najstarszy fakt kluczowy zostaje w pamięci", prompt.contains("synem króla"))
 	check("najnowszy fakt kluczowy zostaje w pamięci", prompt.contains("Zwrot akcji numer 29"))
+
+# ——— Animacja otwarcia ————————————————————————————————————————
+# Katalog klatek zawiera też README, a w wersji wyeksportowanej pliki widać
+# z dopiskiem „.import”. Ani jedno, ani drugie nie może udawać klatki.
+
+func _test_intro() -> void:
+	print("\nAnimacja otwarcia")
+	var frames := Intro._frame_paths()
+	check("lista klatek to tablica", typeof(frames) == TYPE_ARRAY)
+	var only_images := true
+	for f in frames:
+		var low := str(f).to_lower()
+		var ok := false
+		for e in Intro.EXT:
+			if low.ends_with(e):
+				ok = true
+		if not ok:
+			only_images = false
+	check("w liście są wyłącznie obrazy", only_images)
+	eq("available() zgadza się z listą", Intro.available(), not frames.is_empty())

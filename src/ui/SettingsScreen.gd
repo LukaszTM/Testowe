@@ -13,6 +13,8 @@ var _dice: OptionButton
 var _res: OptionButton
 var _winmode: OptionButton
 var _sfx: CheckBox
+var _intro: CheckBox
+var _intro_pace: OptionButton
 var _music: CheckBox
 var _music_vol: HSlider
 var _music_vol_val: Label
@@ -24,6 +26,17 @@ var _test_btn: Button
 var _test_result: Label
 
 var _res_values: Array = []
+
+# Tempo otwarcia księgi — sekundy dla kolejnych pozycji listy.
+const PACE := [1.2, 1.6, 2.0]
+
+func _pace_index() -> int:
+	var v := float(Game.settings.get("intro_seconds", 1.6))
+	var best := 1
+	for i in range(PACE.size()):
+		if absf(PACE[i] - v) < absf(PACE[best] - v):
+			best = i
+	return best
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -66,6 +79,17 @@ func _ready() -> void:
 	col.add_child(wm["row"])
 
 	col.add_child(Ui.subtle("W trybie „W oknie” i „Bez ramki” obowiązuje wybrana rozdzielczość; pełny ekran używa natywnej.", 12))
+
+	_intro = Ui.toggle("Animacja otwarcia księgi", bool(Game.settings.get("intro_on", true)))
+	col.add_child(_intro)
+	var pace := Ui.dropdown("Tempo otwarcia", ["Szybkie (1,2 s)", "Naturalne (1,6 s)", "Dostojne (2,0 s)"])
+	_intro_pace = pace["edit"]
+	_intro_pace.select(_pace_index())
+	col.add_child(pace["row"])
+	if Intro.available():
+		col.add_child(Ui.subtle("Animację można pominąć dowolnym klawiszem.", 12))
+	else:
+		col.add_child(Ui.subtle("Brak klatek animacji — gra startuje od razu w menu. Klatki wrzuca się do katalogu assets/intro.", 12))
 
 	col.add_child(Ui.hsep())
 
@@ -273,6 +297,8 @@ func _save() -> void:
 		var r: Vector2i = _res_values[clampi(_res.selected, 0, _res_values.size() - 1)]
 		Game.settings["resolution"] = "%dx%d" % [r.x, r.y]
 	Game.settings["sfx_on"] = _sfx.button_pressed
+	Game.settings["intro_on"] = _intro.button_pressed
+	Game.settings["intro_seconds"] = PACE[clampi(_intro_pace.selected, 0, PACE.size() - 1)]
 	Game.settings["music_on"] = _music.button_pressed
 	Game.settings["music_volume"] = _music_vol.value
 	Game.settings["font_scale"] = _scale.value

@@ -27,6 +27,12 @@ var seed_value: int = 0
 var rng := RandomNumberGenerator.new()
 var started := false
 
+# Wynik ostatniej próby tury. Gdy Mistrz Gry AI zawiedzie (błąd API, brak
+# sieci), tura jest cofana zamiast podmieniana proceduralną atrapą — ekran
+# gry czyta stąd, że ma oddać akcję graczowi do ponowienia.
+var last_turn_failed := false
+var last_turn_note := ""
+
 var settings: Dictionary = {
 	"mode": "offline",                    # "offline" / "claude" / "ollama"
 	"claude_api_key": "",                 # klucz z platform.claude.com lub bramki zgodnej z API Anthropic
@@ -208,10 +214,9 @@ func begin_adventure() -> void:
 		if raw != "":
 			var pr := Narrator.parse_state(raw)
 			opening = str(pr["text"])
-			var st: Dictionary = pr["state"]
-			_merge_npcs(st.get("postacie", []))
-			_set_suggestions(st.get("podpowiedzi", []))
-			_set_summary(st.get("streszczenie", ""))
+			# Cały blok stanu, nie wybrane pola — model potrafi ustanowić
+			# ważny fakt albo miejsce już w scenie otwierającej.
+			_absorb_state(pr["state"])
 	if opening == "":
 		opening = Narrator.opening(world, character, prof, rng)
 		raw = ""
@@ -240,6 +245,8 @@ func take_action(action: String) -> void:
 		roll = Narrator.roll_action(rng, _attr_modifier(action))
 
 	var raw := ""
+	last_turn_failed = false
+	last_turn_note = ""
 	if Narrator.ai_enabled():
 		# Akcja gracza jest już ostatnim wpisem historii.
 		raw = await Narrator.ai_generate(world, character, history, roll)
@@ -247,11 +254,20 @@ func take_action(action: String) -> void:
 			var pr := Narrator.parse_state(raw)
 			text = str(pr["text"])
 			state = pr["state"]
-
-	if text == "":
-		# Tryb offline (także fallback, gdy AI zawiedzie).
+		if text == "":
+			# Awaria Mistrza Gry (odrzucony klucz, limit zapytań, brak sieci).
+			# Kiedyś turę po cichu dopisywał generator offline — a jego
+			# heurystyka wprowadzała do kanonu kampanii atrapy w rodzaju
+			# „Klucz / kod dostępu”. Teraz tura po prostu nie zachodzi:
+			# akcja gracza wraca do niego, numer tury i świat zostają
+			# nietknięte, a offline pozostaje świadomym wyborem z ustawień.
+			history.pop_back()
+			turn -= 1
+			last_turn_failed = true
+			last_turn_note = "Nie udało się wygenerować tury — spróbuj ponownie."
+			return
+	else:
 		text = Narrator.respond(world, character, prof, action, roll, rng)
-		raw = ""
 
 	var entry := {"role": "narrator", "text": text}
 	# Oryginał z blokiem stanu zostaje w kronice — model musi widzieć własne
@@ -261,11 +277,11 @@ func take_action(action: String) -> void:
 	if not roll.is_empty():
 		entry["roll"] = roll
 	history.append(entry)
-	# Kronikę wypełnia Mistrz Gry własnymi nazwami. Słownikowe zgadywanie
-	# („Klucz / kod dostępu”, „Kawiarnia”) zostaje tylko dla trybu offline —
-	# w trybie AI wstawiałoby do Kroniki atrapy zamiast prawdziwych faktów,
-	# a te wracałyby potem do modelu jako obowiązujący kanon nazw.
-	if state.is_empty():
+	# Słownikowe zgadywanie Kroniki („Klucz / kod dostępu”, „Kawiarnia”)
+	# działa wyłącznie w trybie offline. W trybie AI nawet zepsuty blok
+	# ###STAN (narracja jest, stan pusty) nie uruchamia heurystyki — lepsza
+	# tura bez wpisów niż atrapy, które wróciłyby do modelu jako kanon nazw.
+	if raw == "":
 		_update_memory(action, text)
 	_apply_turn_effects(action, roll, state)
 	emit_signal("chronicle_changed")
@@ -286,14 +302,7 @@ func _apply_turn_effects(action: String, roll: Dictionary, state: Dictionary) ->
 		hp_delta = clampi(int(state.get("hp", 0)), -40, 25)
 		mana_delta = clampi(int(state.get("mana", 0)), -60, 25)
 		xp_gain = clampi(int(state.get("pd", 8)), 0, 40)
-		_merge_npcs(state.get("postacie", []))
-		_set_suggestions(state.get("podpowiedzi", []))
-		_set_summary(state.get("streszczenie", ""))
-		_merge_locations(state.get("miejsca", []))
-		_merge_discoveries(state.get("odkrycia", []))
-		_merge_quests(state.get("watki", []))
-		_merge_facts(state.get("fakty", []))
-		_merge_events(state.get("wydarzenia", []))
+		_absorb_state(state)
 	else:
 		# Tryb offline: proste reguły.
 		xp_gain = 8
@@ -358,6 +367,19 @@ func _check_death() -> void:
 	history.append({"role": "narrator", "text":
 		"Świat ciemnieje. %s osuwa się na ziemię — ta kronika dobiega końca. Możesz wrócić do menu i rozpocząć nową opowieść." % character.get("name", "Bohater")})
 	Saves.save_current()
+
+# Wchłania kompletny blok ###STAN do pamięci świata. Wspólne dla sceny
+# otwierającej i zwykłych tur — każde pole bloku ma trafiać do Kroniki,
+# niezależnie od tego, w której turze model je ustanowił.
+func _absorb_state(st: Dictionary) -> void:
+	_merge_npcs(st.get("postacie", []))
+	_set_suggestions(st.get("podpowiedzi", []))
+	_set_summary(st.get("streszczenie", ""))
+	_merge_locations(st.get("miejsca", []))
+	_merge_discoveries(st.get("odkrycia", []))
+	_merge_quests(st.get("watki", []))
+	_merge_facts(st.get("fakty", []))
+	_merge_events(st.get("wydarzenia", []))
 
 # Miejsca, odkrycia i wątki podane wprost przez Mistrza Gry — w brzmieniu,
 # którego naprawdę używa w opowieści.

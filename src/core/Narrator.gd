@@ -226,8 +226,14 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 	# historii — tutaj dostaje je co turę, w jedynym poprawnym brzmieniu.
 	var canon: Array = []
 	if not Game.npcs.is_empty():
+		# Do kanonu idą postacie widziane najpóźniej, nie pierwsze poznane —
+		# przy pełnej bibliotece świeżo poznany kluczowy przeciwnik nie może
+		# wypadać z promptu tylko dlatego, że stoi na końcu listy.
+		var npc_pool: Array = Game.npcs.duplicate()
+		npc_pool.sort_custom(func(a, b):
+			return int(a.get("ostatnio", a.get("tura", 0))) > int(b.get("ostatnio", b.get("tura", 0))))
 		var known: Array = []
-		for n in Game.npcs.slice(0, 14):
+		for n in npc_pool.slice(0, 14):
 			var who := str(n.get("imie", ""))
 			var role := str(n.get("rola", "")).strip_edges()
 			var rel := str(n.get("relacja", "")).strip_edges()
@@ -246,8 +252,11 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 			locs.append(str(l.get("name", "")))
 		canon.append("· Miejsca: " + "; ".join(locs))
 	if not Game.discoveries.is_empty():
+		# Jak wyżej: najświeższe odkrycia, nie czternaście najstarszych.
+		var ds_pool: Array = Game.discoveries.duplicate()
+		ds_pool.sort_custom(func(a, b): return int(a.get("tura", 0)) > int(b.get("tura", 0)))
 		var ds: Array = []
-		for d in Game.discoveries.slice(0, 14):
+		for d in ds_pool.slice(0, 14):
 			ds.append(str(d.get("title", "")))
 		canon.append("· Przedmioty i odkrycia: " + "; ".join(ds))
 	var qs: Array = []
@@ -269,8 +278,10 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 			key_facts.append("· [tura %d] %s" % [int(f.get("tura", 0)), str(f.get("tresc", ""))])
 		else:
 			recent.append("· [tura %d] %s" % [int(f.get("tura", 0)), str(f.get("tresc", ""))])
-	if key_facts.size() > 20:
-		key_facts = key_facts.slice(key_facts.size() - 20)
+	# Fakty kluczowe wracają do modelu WSZYSTKIE, w każdej turze — obietnica
+	# „kluczowy zostaje na zawsze” obejmuje też aktywną pamięć modelu, nie
+	# tylko plik zapisu. Górną granicę trzyma _trim_facts() w GameState
+	# (łączny limit kroniki), więc lista nie rośnie bez końca.
 	if recent.size() > 10:
 		recent = recent.slice(recent.size() - 10)
 	if not key_facts.is_empty() or not recent.is_empty():

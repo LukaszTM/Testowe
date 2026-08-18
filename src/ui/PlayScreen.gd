@@ -17,6 +17,7 @@ var _npcs: VBoxContainer
 var _status: Label
 var _title: Label
 var _busy := false
+var _last_ai_note := ""   # ostatni komunikat awarii AI z tej tury — patrz _submit
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -196,9 +197,17 @@ func _submit(text: String) -> void:
 		return
 	_input.text = ""
 	_resize_input()
+	_last_ai_note = ""
 	_set_busy(true)
 	await Game.take_action(text)
 	_set_busy(false)
+	if Game.last_turn_failed:
+		# Tura nie doszła do skutku (awaria Mistrza Gry) — akcja wraca do
+		# pola, żeby dało się ją ponowić albo poprawić, a status mówi czemu.
+		_input.text = text
+		_resize_input()
+		_status.text = _last_ai_note if _last_ai_note != "" else Game.last_turn_note
+		return
 	_render_log()
 	_rebuild_suggestions()
 	_scroll_to_bottom()
@@ -539,7 +548,12 @@ func _on_save() -> void:
 	if is_instance_valid(_status):
 		_status.text = _mode_note()
 
-func _on_ai_state(_available: bool, note: String) -> void:
+func _on_ai_state(available: bool, note: String) -> void:
+	# Komunikaty awarii przychodzą w trakcie tury (_busy), gdy status pokazuje
+	# „Mistrz Gry myśli…” — zapamiętujemy ostatni, żeby po nieudanej turze
+	# pokazać graczowi konkretny powód, nie tylko „spróbuj ponownie”.
+	if not available:
+		_last_ai_note = note
 	if is_instance_valid(_status) and not _busy:
 		_status.text = note
 

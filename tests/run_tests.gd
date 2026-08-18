@@ -13,6 +13,14 @@ var _passed := 0
 var _failed := 0
 var _done := false
 
+# W trybie `--script` Godot nie rejestruje autoloadów jako globalnych
+# identyfikatorów (skrypt kompilował się z błędem „Identifier not found”).
+# Pobieramy je więc z drzewa pod tymi samymi nazwami. Uwaga: NIE wolno tu
+# preloadować skryptów gry — ten skrypt kompiluje się przed rejestracją
+# autoloadów, więc preload zatruwa cache wersją bez globalnych identyfikatorów.
+var Game
+var Narrator
+
 # MainLoop._process pierwszej klatki: autoloady (Game, Narrator, Saves) są już
 # w drzewie. W _init() jeszcze ich nie ma.
 func _process(_delta: float) -> bool:
@@ -28,12 +36,17 @@ func _run() -> void:
 		push_error("Autoload Game niedostępny — uruchom z katalogu projektu.")
 		quit(1)
 		return
+	Game = root.get_node("Game")
+	Narrator = root.get_node("Narrator")
 	_test_parser()
 	_test_rng_state()
 	_test_save_roundtrip()
 	_test_migration()
 	_test_progression()
 	_test_chronicle_merge()
+	_test_absorb_state()
+	_test_canon_selection()
+	await _test_ai_failure()
 	print("\n=== %d przeszło, %d nie przeszło ===" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)
 
@@ -65,19 +78,19 @@ func _test_parser() -> void:
 		["klamra w narracji", "###STAN {\"pd\":3}\n\nNa ścianie znak {X}.", 3, "Na ścianie znak {X}."],
 	]
 	for c in cases:
-		var r := Narrator.parse_state(str(c[1]))
+		var r: Dictionary = Narrator.parse_state(str(c[1]))
 		var state: Dictionary = r["state"]
 		eq("%s — pd" % c[0], int(state.get("pd", -1)), int(c[2]))
 		eq("%s — tekst" % c[0], str(r["text"]), str(c[3]))
 
-	var none := Narrator.parse_state("Sam opis, bez stanu.")
+	var none: Dictionary = Narrator.parse_state("Sam opis, bez stanu.")
 	check("brak bloku zwraca pusty stan", (none["state"] as Dictionary).is_empty())
 	eq("brak bloku nie rusza tekstu", str(none["text"]), "Sam opis, bez stanu.")
 
-	var broken := Narrator.parse_state("###STAN {\"pd\":brak}\n\nTekst mimo wszystko.")
+	var broken: Dictionary = Narrator.parse_state("###STAN {\"pd\":brak}\n\nTekst mimo wszystko.")
 	check("uszkodzony JSON nie wywala parsera", (broken["state"] as Dictionary).is_empty())
 
-	var loose := Narrator.parse_state("Widzisz napis {tajne} na drzwiach.")
+	var loose: Dictionary = Narrator.parse_state("Widzisz napis {tajne} na drzwiach.")
 	check("klamra w opowieści nie udaje bloku stanu", (loose["state"] as Dictionary).is_empty())
 
 # ——— Stan generatora losowego ————————————————————————————————
@@ -123,8 +136,8 @@ func _test_save_roundtrip() -> void:
 	for i in 5:
 		Game.rng.randi()
 	# Zapis powstaje TERAZ; expected_next to liczba, która wypadnie zaraz po nim.
-	var snapshot := Game.to_dict()
-	var expected_next := Game.rng.randi()
+	var snapshot: Dictionary = Game.to_dict()
+	var expected_next: int = Game.rng.randi()
 	# Psujemy stan, żeby mieć pewność, że wczytanie naprawdę go odbudowuje.
 	Game.world = {}
 	Game.character = {}
@@ -251,3 +264,104 @@ func _test_chronicle_merge() -> void:
 	Game._merge_quests([{"tytul": "Kto wysłał list", "stan": "zamknięty"}])
 	eq("wątek nie zdublowany", Game.quests.size(), 1)
 	eq("wątek zamknięty", str(Game.quests[0].get("status", "")), "zamknięty")
+
+# ——— Pełny blok stanu ze sceny otwierającej ————————————————————
+# Recenzja 3.5, pkt 3: pierwsza odpowiedź AI scalała tylko postacie,
+# podpowiedzi i streszczenie — fakt ustanowiony w intro przepadał.
+# _absorb_state jest wspólne dla otwarcia i zwykłych tur, więc test pilnuje,
+# że wchłania KAŻDE pole bloku ###STAN.
+
+func _test_absorb_state() -> void:
+	print("\nWchłanianie pełnego bloku stanu")
+	Game.npcs = []
+	Game.locations = []
+	Game.discoveries = []
+	Game.quests = []
+	Game.facts = []
+	Game.events = []
+	Game.summary = ""
+	Game.turn = 0
+	Game.character = {"name": "Halina"}
+	Game._absorb_state({
+		"postacie": [{"imie": "Marta", "plec": "kobieta", "rola": "zielarka", "relacja": "nieufna"}],
+		"miejsca": [{"nazwa": "Skład przy Starym Trakcie", "opis": "pusty magazyn"}],
+		"odkrycia": [{"nazwa": "List bez podpisu", "rodzaj": "Trop", "opis": "z piwnicy"}],
+		"watki": [{"tytul": "Kto wysłał list", "stan": "otwarty"}],
+		"fakty": [{"tresc": "Wójt zna nadawcę.", "waga": "kluczowy"}],
+		"wydarzenia": [{"opis": "Marta wpuściła gracza do składu."}],
+		"streszczenie": "Halina trafiła do składu.",
+		"podpowiedzi": ["Zapytaj Martę o list"],
+	})
+	eq("postać z intro", Game.npcs.size(), 1)
+	eq("miejsce z intro", Game.locations.size(), 1)
+	eq("odkrycie z intro", Game.discoveries.size(), 1)
+	eq("wątek z intro", Game.quests.size(), 1)
+	eq("fakt z intro", Game.facts.size(), 1)
+	eq("wydarzenie z intro", Game.events.size(), 1)
+	eq("streszczenie z intro", Game.summary, "Halina trafiła do składu.")
+	eq("podpowiedzi z intro", Game.suggestions.size(), 1)
+
+# ——— Selekcja pamięci do promptu ———————————————————————————————
+# Recenzja 3.5, pkt 1–2: do modelu szło pierwszych 14 postaci i odkryć
+# (nie najświeższe) oraz najwyżej 20 ostatnich faktów kluczowych. Prompt ma
+# nieść postacie widziane ostatnio i WSZYSTKIE fakty kluczowe.
+
+func _test_canon_selection() -> void:
+	print("\nSelekcja kanonu i pamięci świata")
+	Game.world = {"name": "Test", "genre_key": "fantasy"}
+	Game.character = {"name": "Halina", "gender": "Kobieta"}
+	Game.ensure_character_stats()
+	Game.summary = ""
+	Game.locations = []
+	Game.quests = []
+	Game.events = []
+	Game.npcs = []
+	for i in range(20):
+		Game.npcs.append({"imie": "Postać%02d" % i, "plec": "kobieta", "rola": "",
+			"relacja": "", "stan": "żywy", "tura": i, "ostatnio": i})
+	Game.discoveries = []
+	for i in range(20):
+		Game.discoveries.append({"title": "Odkrycie%02d" % i, "type": "Trop",
+			"note": "", "time": "tura %d" % i, "tura": i})
+	Game.facts = []
+	for i in range(25):
+		Game.facts.append({"tresc": "Fakt kluczowy numer %02d." % i,
+			"waga": "kluczowy", "tura": i})
+	var prompt: String = Narrator._gm_system(Game.world, Game.character)
+	check("najświeższa postać jest w kanonie", prompt.contains("Postać19"))
+	check("najstarsza postać ustępuje świeżym", not prompt.contains("Postać00"))
+	check("najświeższe odkrycie jest w kanonie", prompt.contains("Odkrycie19"))
+	check("najstarsze odkrycie ustępuje świeżym", not prompt.contains("Odkrycie00"))
+	check("najstarszy fakt kluczowy nie wypada z pamięci",
+		prompt.contains("Fakt kluczowy numer 00."))
+	check("najnowszy fakt kluczowy też obecny",
+		prompt.contains("Fakt kluczowy numer 24."))
+
+# ——— Awaria Mistrza Gry nie psuje kampanii ————————————————————
+# Recenzja 3.5, pkt 4: błąd API podmieniał turę proceduralną atrapą, a
+# heurystyka offline dopisywała do kanonu sztuczne wpisy. Nieudana tura ma
+# być cofnięta w całości: bez wpisu w historii, bez numeru tury, bez zmian
+# w Kronice — akcja wraca do gracza z komunikatem.
+
+func _test_ai_failure() -> void:
+	print("\nAwaria Mistrza Gry")
+	var prev_mode = Game.settings.get("mode", "offline")
+	var prev_key = Game.settings.get("claude_api_key", "")
+	Game.settings["mode"] = "claude"
+	Game.settings["claude_api_key"] = ""   # gwarantowany, natychmiastowy błąd bez sieci
+	Game.world = {"name": "Test", "genre_key": "fantasy"}
+	Game.character = {"name": "Halina", "gender": "Kobieta"}
+	Game.ensure_character_stats()
+	Game.history = [{"role": "narrator", "text": "Początek."}]
+	Game.turn = 7
+	Game.discoveries = []
+	# „list” i „notatki” to słowa-klucze heurystyki — przed poprawką ta akcja
+	# dopisałaby do Kroniki atrapę „Zapisana wiadomość”.
+	await Game.take_action("czytam list z notatkami")
+	eq("numer tury bez zmian", Game.turn, 7)
+	eq("akcja gracza zdjęta z historii", Game.history.size(), 1)
+	check("gra zgłasza nieudaną turę", Game.last_turn_failed)
+	check("jest komunikat do ponowienia", Game.last_turn_note != "")
+	check("heurystyka nie dopisała atrap do Kroniki", Game.discoveries.is_empty())
+	Game.settings["mode"] = prev_mode
+	Game.settings["claude_api_key"] = prev_key

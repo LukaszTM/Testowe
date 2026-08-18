@@ -199,7 +199,20 @@ static func build_theme() -> Theme:
 	t.set_stylebox("hover", "Button", _sbt("btn_wide_hover", 92, 33, 46, 14))
 	t.set_stylebox("pressed", "Button", _sbt("btn_wide_down", 92, 33, 46, 14))
 	t.set_stylebox("disabled", "Button", _sbt("btn_wide_off", 92, 33, 46, 14))
-	t.set_stylebox("focus", "Button", StyleBoxEmpty.new())
+	# Fokus MUSI być widoczny — bez tego gracz poruszający się tabulatorem
+	# nie wie, na czym stoi.
+	var focus := StyleBoxFlat.new()
+	focus.bg_color = Color(0, 0, 0, 0)
+	focus.set_border_width_all(2)
+	focus.border_color = GOLD_BRIGHT
+	focus.set_corner_radius_all(4)
+	focus.content_margin_left = 0
+	focus.content_margin_right = 0
+	focus.content_margin_top = 0
+	focus.content_margin_bottom = 0
+	t.set_stylebox("focus", "Button", focus)
+	t.set_stylebox("focus", "CheckBox", focus)
+	t.set_stylebox("focus", "OptionButton", focus)
 	t.set_color("font_color", "Button", PARCH_TEXT)
 	t.set_color("font_hover_color", "Button", Color("fbeec6"))
 	t.set_color("font_pressed_color", "Button", Color("fff8e2"))

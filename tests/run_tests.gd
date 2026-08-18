@@ -28,6 +28,8 @@ func _run() -> void:
 		push_error("Autoload Game niedostępny — uruchom z katalogu projektu.")
 		quit(1)
 		return
+	# Testy nie mogą pisać po prawdziwych zapisach gracza.
+	Saves.use_test_dirs("autotest")
 	_test_parser()
 	_test_rng_state()
 	_test_save_roundtrip()
@@ -37,6 +39,10 @@ func _run() -> void:
 	_test_state_block()
 	_test_prompt_memory()
 	_test_intro()
+	_test_save_files()
+	_test_session_guard()
+	_test_checkbox_icons()
+	_cleanup()
 	print("\n=== %d przeszło, %d nie przeszło ===" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)
 
@@ -353,3 +359,141 @@ func _test_intro() -> void:
 			only_images = false
 	check("w liście są wyłącznie obrazy", only_images)
 	eq("available() zgadza się z listą", Intro.available(), not frames.is_empty())
+
+# ——— Prawdziwy zapis i odczyt przez SaveManager ————————————————
+# Wcześniej „Zapisano ✓” pokazywało się także wtedy, gdy pliku nie dało się
+# otworzyć. Teraz wynik zapisu musi odpowiadać temu, co leży na dysku.
+
+func _test_save_files() -> void:
+	print("\nPliki zapisu")
+	Game.world = {"name": "Testowy Świat", "genre_key": "fantasy"}
+	Game.character = {"name": "Testowy Bohater", "gender": "Mężczyzna"}
+	Game.ensure_character_stats()
+	Game.history = [{"role": "narrator", "text": "Start."}]
+	Game.turn = 3
+	Game.started = true
+	Game.busy = false
+	Game.save_path = ""
+
+	check("zapis się udaje", Saves.save_current())
+	var path: String = Game.save_path
+	check("plik naprawdę istnieje", FileAccess.file_exists(path))
+
+	# Zapis w połowie tury jest odrzucany — utrwaliłby akcję bez odpowiedzi.
+	Game.busy = true
+	check("zapis w trakcie tury odrzucony", not Saves.save_current())
+	check("powód podany", Saves.last_error != "")
+	Game.busy = false
+
+	# Drugi zapis zostawia poprzednią wersję jako kopię bezpieczeństwa.
+	Game.turn = 4
+	check("drugi zapis się udaje", Saves.save_current())
+	check("powstała kopia bezpieczeństwa", FileAccess.file_exists(path + ".bak"))
+
+	# Wczytanie odtwarza turę.
+	Game.turn = 0
+	check("wczytanie się udaje", Saves.load_into_game(path))
+	eq("tura po wczytaniu", Game.turn, 4)
+
+	# Uszkodzony plik główny — gra sięga po kopię, zamiast udawać, że kroniki nie ma.
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string("{ to nie jest poprawny json")
+	f.close()
+	Game.turn = 0
+	check("wczytanie ratuje się kopią", Saves.load_into_game(path))
+	eq("kopia niesie poprzednią turę", Game.turn, 3)
+	check("gracz dostaje wyjaśnienie", Saves.last_error != "")
+
+	# Uszkodzony zapis nie znika z listy — pojawia się z oznaczeniem.
+	f = FileAccess.open(path, FileAccess.WRITE)
+	f.store_string("{ znowu śmieci")
+	f.close()
+	var broken_seen := false
+	for row in Saves.list_saves():
+		if str(row.get("path", "")) == path and bool(row.get("broken", false)):
+			broken_seen = true
+	check("uszkodzony zapis widoczny na liście", broken_seen)
+
+	# Walidacja struktury: sam słownik to za mało.
+	check("odrzuca history jako tekst", not Saves.validate_save({"history": "tekst"}))
+	check("odrzuca character jako liczbę", not Saves.validate_save({"character": 15}))
+	check("przyjmuje poprawny szkielet",
+		Saves.validate_save({"world": {}, "character": {}, "history": []}))
+
+	# Dwaj bohaterowie o tym samym imieniu to dwa różne pliki.
+	var a := {"name": "Bruno", "id": Saves.new_character_id()}
+	var b := {"name": "Bruno", "id": Saves.new_character_id()}
+	check("różne identyfikatory dają różne pliki",
+		Saves.character_path(a) != Saves.character_path(b))
+
+# ——— Odpowiedź z porzuconej sesji ————————————————————————————
+# Model odpowiada po kilku sekundach. Gracz może w tym czasie wyjść do menu
+# i wczytać inną kronikę — stara odpowiedź nie może wtedy nic zmienić.
+
+func _test_session_guard() -> void:
+	print("\nOchrona sesji")
+	var before := Game.session_id
+	Game.new_world()
+	check("nowa opowieść zmienia numer sesji", Game.session_id != before)
+
+	var mine := Game.session_id
+	var req: int = Game._next_request()
+	check("świeże żądanie jest aktualne", not Game._stale(mine, req))
+
+	# Gracz wczytał inną kronikę — numer sesji się zmienił.
+	Game.session_id += 1
+	check("odpowiedź z poprzedniej sesji odrzucona", Game._stale(mine, req))
+
+	# Dwie akcje pod rząd: starsza odpowiedź nie może nadpisać nowszej.
+	var now := Game.session_id
+	var first := Game._next_request()
+	var second := Game._next_request()
+	check("starsze żądanie odrzucone", Game._stale(now, first))
+	check("najnowsze żądanie przechodzi", not Game._stale(now, second))
+
+	# Zepsuty blok stanu nie może wyciec do kroniki jako techniczny JSON.
+	var r := Narrator.parse_state("###STAN {\"pd\": brak,\n\"postacie\": [\n\nWchodzisz do izby.")
+	check("znacznik nie trafia do gracza", not str(r["text"]).contains("###STAN"))
+	check("narracja ocalała", str(r["text"]).contains("Wchodzisz do izby."))
+
+# ——— Znaczniki przełącznika ————————————————————————————————
+# W paczce assetów pliki mają odwrotne nazwy: „checked” to pusta ramka,
+# a „unchecked” niesie ptaszek. Ustawienia pokazywały przez to stan na opak.
+
+func _test_checkbox_icons() -> void:
+	print("\nZnaczniki przełącznika")
+	var on_tex := Ui.art("check_on")
+	var off_tex := Ui.art("check_off")
+	check("obie grafiki istnieją", on_tex != null and off_tex != null)
+	if on_tex == null or off_tex == null:
+		return
+	var on_mid := _mid_brightness(on_tex)
+	var off_mid := _mid_brightness(off_tex)
+	# Ptaszek jest ciemnym złotem na ciemnym polu; pusta ramka ma jasny pergamin.
+	check("zaznaczony ma znacznik, pusty jest jaśniejszy", on_mid < off_mid,
+		"— on=%.1f off=%.1f" % [on_mid, off_mid])
+
+func _mid_brightness(tex: Texture2D) -> float:
+	var img := tex.get_image()
+	if img == null:
+		return 0.0
+	var w := img.get_width()
+	var h := img.get_height()
+	var total := 0.0
+	var n := 0
+	for y in range(int(h * 0.32), int(h * 0.68)):
+		for x in range(int(w * 0.32), int(w * 0.68)):
+			var c := img.get_pixel(x, y)
+			total += (c.r + c.g + c.b) / 3.0 * 255.0
+			n += 1
+	return total / maxf(1.0, float(n))
+
+# ——— Sprzątanie ————————————————————————————————————————————
+
+func _cleanup() -> void:
+	for d in [Saves.dir_saves, Saves.dir_chars]:
+		var dir := DirAccess.open(d)
+		if dir == null:
+			continue
+		for f in dir.get_files():
+			DirAccess.remove_absolute("%s/%s" % [d, f])

@@ -35,8 +35,10 @@ jobs = [
     ("frames/input_field.png",                          "field.png",            540),
     ("ornaments/divider_ornament.png",                  "ornament.png",         420),
     ("frames/parchment_content_frame.png",              "card_frame.png",       760),
-    ("controls/checkbox_checked.png",                   "check_on.png",          44),
-    ("controls/checkbox_unchecked.png",                 "check_off.png",         44),
+    # UWAGA: pliki w paczce mają odwrotne nazwy — „checked” to pusta ramka,
+    # a „unchecked” niesie złoty ptaszek. Mapujemy je na odwrót celowo.
+    ("controls/checkbox_unchecked.png",                 "check_on.png",          44),
+    ("controls/checkbox_checked.png",                   "check_off.png",         44),
     ("controls/slider_gold.png",                        "slider.png",           420),
 ]
 for j in jobs:

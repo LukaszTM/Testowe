@@ -225,6 +225,11 @@ func _gm_system(world: Dictionary, character: Dictionary) -> String:
 	lines.append("POSTAĆ GRACZA: %s (%s) — %s; cechy: %s; cel: %s; słabość: %s." % [
 		character.get("name", ""), character.get("gender", ""), character.get("archetype", ""),
 		character.get("traits", ""), character.get("goal", ""), character.get("weakness", "")])
+	# Gracz poświęcił czas na napisanie pochodzenia bohatera — Mistrz Gry ma
+	# je znać i móc się na nie powołać.
+	var background := str(character.get("background", "")).strip_edges()
+	if background != "":
+		lines.append("PRZESZŁOŚĆ BOHATERA (możesz z niej korzystać, wracać do niej i budować na niej wątki): %s" % background)
 	lines.append("STATYSTYKI GRACZA: poziom %d; Siła %d, Zręczność %d, Intelekt %d, Charyzma %d; Zdrowie %d/%d%s." % [
 		int(character.get("level", 1)),
 		int(attrs.get("sila", 5)), int(attrs.get("zrecznosc", 5)),
@@ -333,17 +338,17 @@ func parse_state(text: String) -> Dictionary:
 	var from := marker + 7 if marker != -1 else 0
 	var open_brace := text.find("{", from)
 	if open_brace == -1:
-		return {"text": _clean_fences(text), "state": {}}
+		return {"text": _strip_broken(text, marker), "state": {}}
 	# Bez znacznika ufamy tylko blokowi na samym początku odpowiedzi —
 	# inaczej wzięlibyśmy klamrę z treści opowieści.
 	if marker == -1 and text.substr(0, open_brace).strip_edges().replace("`", "").replace("json", "") != "":
 		return {"text": _clean_fences(text), "state": {}}
 	var close_brace := _match_brace(text, open_brace)
 	if close_brace == -1:
-		return {"text": _clean_fences(text), "state": {}}
+		return {"text": _strip_broken(text, marker), "state": {}}
 	var parsed = JSON.parse_string(text.substr(open_brace, close_brace - open_brace + 1))
 	if typeof(parsed) != TYPE_DICTIONARY:
-		return {"text": _clean_fences(text), "state": {}}
+		return {"text": _strip_broken(text, marker), "state": {}}
 	var cut_from := marker if marker != -1 else open_brace
 	var rest := text.substr(close_brace + 1)
 	return {"text": _clean_fences(text.substr(0, cut_from) + rest), "state": parsed}
@@ -372,6 +377,27 @@ func _match_brace(t: String, start: int) -> int:
 			if depth == 0:
 				return i
 	return -1
+
+# Model zepsuł blok stanu — nie damy rady go odczytać, ale gracz nie może
+# zobaczyć w kronice technicznego JSON-a. Wycinamy znacznik i wszystkie linie,
+# które wyglądają na resztki bloku, aż do pierwszego zdania narracji.
+func _strip_broken(text: String, marker: int) -> String:
+	if marker == -1:
+		return _clean_fences(text)
+	var head := text.substr(0, marker)
+	var tail := text.substr(marker)
+	var keep: Array = []
+	var still_state := true
+	for line in tail.split("\n"):
+		var t := str(line).strip_edges()
+		if still_state:
+			if t == "" or t.begins_with("###STAN") or t.begins_with("{") or t.begins_with("}") \
+					or t.begins_with("[") or t.begins_with("]") or t.begins_with("\"") \
+					or t.begins_with("```") or t.contains("\":"):
+				continue
+			still_state = false
+		keep.append(line)
+	return _clean_fences(head + "\n".join(keep))
 
 # Usuwa resztki ogrodzeń kodu, gdy model opakował blok w ```.
 func _clean_fences(t: String) -> String:

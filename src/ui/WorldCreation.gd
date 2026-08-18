@@ -103,6 +103,11 @@ func _randomize_world() -> void:
 	_apply_template(i)
 	_f["name"].text = "%s %s" % [NAME_A[randi() % NAME_A.size()], NAME_B[randi() % NAME_B.size()]]
 
+# Wartość pola albo — gdy puste — propozycja z szablonu gatunku.
+func _filled(field: String, tmpl: Dictionary) -> String:
+	var v: String = _f[field].text.strip_edges()
+	return v if v != "" else str(tmpl.get(field, ""))
+
 func _restore() -> void:
 	var w := Game.world
 	_mood.select(maxi(0, MOOD_KEYS.find(str(w.get("mood", "wywazona")))))
@@ -117,20 +122,25 @@ func _restore() -> void:
 
 func _go_next() -> void:
 	var key := Genres.key_at(_f["genre"].selected)
+	var tmpl := Genres.template(key)
 	var world_name: String = _f["name"].text.strip_edges()
 	if world_name == "":
 		world_name = "Świat bez nazwy"
+	# Ekran obiecuje, że puste pole uzupełni szablon gatunku — musi więc
+	# naprawdę to robić, także wtedy, gdy gracz sam wyczyścił pole.
 	Game.world = {
 		"name": world_name,
 		"genre_key": key,
 		"genre_label": Genres.label(key),
-		"era": _f["era"].text.strip_edges(),
+		"era": _filled("era", tmpl),
 		"year": _f["year"].text.strip_edges(),
-		"climate": _f["climate"].text.strip_edges(),
-		"supernatural": _f["supernatural"].text.strip_edges(),
-		"tone": _f["tone"].text.strip_edges(),
-		"start_location": _f["start_location"].text.strip_edges(),
+		"climate": _filled("climate", tmpl),
+		"supernatural": _filled("supernatural", tmpl),
+		"tone": _filled("tone", tmpl),
+		"start_location": _filled("start_location", tmpl),
 		"mood": MOOD_KEYS[_mood.selected],
-		"mystery": "",
+		# Tajemnica nie ma już swojej rubryki w kreatorze, ale szablon gatunku
+		# ją niesie — szkoda, żeby leżała nieużywana.
+		"mystery": str(tmpl.get("mystery", "")),
 	}
 	Game.router.goto("character")

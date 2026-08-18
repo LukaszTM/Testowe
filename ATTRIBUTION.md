@@ -11,7 +11,7 @@ Kod gry: licencja MIT (patrz `LICENSE`).
 | Plik | Krój | Licencja |
 |---|---|---|
 | `EBGaramond-Regular/Medium/Bold.ttf` | EB Garamond | SIL Open Font License 1.1 |
-| `EBGaramond12-Regular/Bold/Italic.ttf` | EB Garamond 12 | SIL Open Font License 1.1 |
+| `EBGaramond12-Italic.ttf` | EB Garamond 12 | SIL Open Font License 1.1 |
 | `GreatVibes-Regular.ttf` | Great Vibes | SIL Open Font License 1.1 |
 | `Almendra-Regular.ttf` | Almendra | SIL Open Font License 1.1 |
 

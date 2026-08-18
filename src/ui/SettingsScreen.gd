@@ -26,6 +26,8 @@ var _test_btn: Button
 var _test_result: Label
 
 var _res_values: Array = []
+# Kopia ustawień dźwięku sprzed podglądu — do przywrócenia po „Wstecz”.
+var _audio_before := {}
 
 # Tempo otwarcia księgi — sekundy dla kolejnych pozycji listy.
 const PACE := [1.2, 1.6, 2.0]
@@ -40,6 +42,10 @@ func _pace_index() -> int:
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_audio_before = {
+		"music_on": Game.settings.get("music_on", true),
+		"music_volume": Game.settings.get("music_volume", 0.55),
+	}
 	add_child(Ui.title_bar("Ustawienia"))
 	add_child(Ui.hint_page("Co tu ustawisz", [
 		"# Obraz",
@@ -73,12 +79,12 @@ func _ready() -> void:
 	_res.select(_current_res_index())
 	col.add_child(res["row"])
 
-	var wm := Ui.dropdown("Tryb okna", ["W oknie", "Bez ramki (cały pulpit)", "Pełny ekran"])
+	var wm := Ui.dropdown("Tryb okna", ["W oknie", "Okno bez ramki", "Pełny ekran"])
 	_winmode = wm["edit"]
 	_winmode.select({"windowed": 0, "borderless": 1, "fullscreen": 2}.get(Game.settings.get("window_mode", "windowed"), 0))
 	col.add_child(wm["row"])
 
-	col.add_child(Ui.subtle("W trybie „W oknie” i „Bez ramki” obowiązuje wybrana rozdzielczość; pełny ekran używa natywnej.", 12))
+	col.add_child(Ui.subtle("W trybie „W oknie” i „Okno bez ramki” obowiązuje wybrana rozdzielczość; pełny ekran używa natywnej.", 12))
 
 	_intro = Ui.toggle("Animacja otwarcia księgi", bool(Game.settings.get("intro_on", true)))
 	col.add_child(_intro)
@@ -224,7 +230,14 @@ func _ready() -> void:
 	var row: HBoxContainer = bar["row"]
 	var back := Ui.button("Wstecz")
 	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	back.pressed.connect(func(): Game.router.goto("menu"))
+	# Muzyka reaguje od razu na przełącznik i suwak, żeby było słychać, co się
+	# ustawia. „Wstecz” musi więc cofnąć również ten podgląd — inaczej rezygnacja
+	# z zapisu i tak zmieniałaby ustawienia.
+	back.pressed.connect(func():
+		Game.settings["music_on"] = _audio_before.get("music_on", true)
+		Game.settings["music_volume"] = _audio_before.get("music_volume", 0.55)
+		Audio.apply_settings()
+		Game.router.goto("menu"))
 	row.add_child(back)
 	var save := Ui.button("Zapisz ustawienia", true)
 	save.size_flags_horizontal = Control.SIZE_EXPAND_FILL

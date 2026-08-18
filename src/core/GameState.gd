@@ -28,6 +28,14 @@ var facts: Array = []          # [{tresc, waga, tura}] — trwałe fakty świata
 var events: Array = []         # [{opis, tura}] — oś czasu wydarzeń
 var save_path := ""            # plik tej kroniki (pusty = jeszcze niezapisana)
 
+# Każda rozgrywka ma własny numer. Odpowiedź modelu potrafi wrócić po tym, jak
+# gracz zdążył wyjść do menu i wczytać inną kronikę — wtedy numer się nie zgadza
+# i odpowiedź jest odrzucana, zamiast dopisać wątek z fantasy do kampanii sci-fi.
+var session_id := 0
+var _request_id := 0
+# Trwa tura: ekran blokuje wyjście i zapis, żeby nie utrwalić połowy tury.
+var busy := false
+
 const ATTR_KEYS := ["sila", "zrecznosc", "intelekt", "charyzma"]
 const ATTR_LABELS := {"sila": "Siła", "zrecznosc": "Zręczność", "intelekt": "Intelekt", "charyzma": "Charyzma"}
 var turn: int = 0
@@ -171,6 +179,8 @@ func spend_attr(key: String) -> void:
 func new_world() -> void:
 	world = {}
 	character = {}
+	session_id += 1
+	busy = false
 
 # Korutyna: w trybie Mistrza Gry czeka na pierwszą scenę. Wywołuj przez await.
 # Zwraca false, gdy Mistrz Gry nie odpowiedział — wtedy opowieść się NIE zaczyna
@@ -202,6 +212,8 @@ func begin_adventure() -> bool:
 	summary = ""
 	facts.clear()
 	events.clear()
+	session_id += 1
+	busy = false
 	var prof := profile()
 	# Startowy punkt zaczepienia w Kronice — nazwa z kreatora świata,
 	# a dopiero w jej braku szablon gatunku.
@@ -217,7 +229,13 @@ func begin_adventure() -> bool:
 	var opening := ""
 	var raw := ""
 	if Narrator.ai_enabled():
+		busy = true
+		var my_session := session_id
+		var my_request := _next_request()
 		raw = (await Narrator.ai_generate(world, character, history, {})).strip_edges()
+		if _stale(my_session, my_request):
+			return false      # gracz w międzyczasie odszedł — nic nie ruszamy
+		busy = false
 		if raw == "":
 			started = false
 			return false
@@ -246,7 +264,10 @@ func take_action(action: String) -> void:
 	# próbę, a Mistrz Gry (także AI) tylko opisuje jej skutek.
 	var roll := {}
 	if _should_roll(action):
-		roll = Narrator.roll_action(rng, _attr_modifier(action))
+		# Gracz ma widzieć, skąd wziął się wynik — sam rzut mówi mu za mało.
+		var test := _attr_test(action)
+		roll = Narrator.roll_action(rng, int(test["mod"]))
+		roll["attr"] = ATTR_LABELS.get(test["key"], "")
 
 	# Akcja wchodzi do historii przed zapytaniem, bo model musi ją zobaczyć.
 	turn += 1
@@ -258,7 +279,15 @@ func take_action(action: String) -> void:
 	var outcome: int = Turn.OFFLINE
 
 	if Narrator.ai_enabled():
+		busy = true
+		var my_session := session_id
+		var my_request := _next_request()
 		raw = (await Narrator.ai_generate(world, character, history, roll)).strip_edges()
+		if _stale(my_session, my_request):
+			# Odpowiedź dotyczy rozgrywki, której już nie ma (gracz wyszedł do
+			# menu, wczytał inną kronikę albo zaczął nową). Wyrzucamy ją.
+			return
+		busy = false
 		if raw == "":
 			# Awaria Mistrza Gry: limit zapytań, zerwane łącze, odmowa modelu.
 			# NIE podstawiamy narracji proceduralnej — jedna taka „zastępcza”
@@ -278,6 +307,10 @@ func take_action(action: String) -> void:
 	else:
 		text = Narrator.respond(world, character, prof, action, roll, rng)
 
+	# Podpowiedzi opisują BIEŻĄCĄ scenę. Gdy nowa odpowiedź ich nie przyniesie,
+	# lepiej pokazać pulę gatunku niż propozycje sprzed dwóch scen.
+	suggestions.clear()
+
 	var entry := {"role": "narrator", "text": text}
 	# Oryginał z blokiem stanu zostaje w kronice — model musi widzieć własne
 	# odpowiedzi dokładnie tak, jak je napisał, inaczej gubi format i fakty.
@@ -295,9 +328,22 @@ func take_action(action: String) -> void:
 		_update_memory(action, text)
 	_apply_turn_effects(action, roll, state, outcome == Turn.OFFLINE)
 	emit_signal("chronicle_changed")
-	# Autozapis co pięć tur — długiej rozgrywki nie wolno stracić.
-	if turn % 5 == 0:
-		Saves.save_current()
+	# Autozapis po KAŻDEJ ukończonej turze — dopiero tutaj, gdy narracja jest
+	# już w kronice i efekty zastosowane. Zapis w połowie tury utrwaliłby akcję
+	# gracza bez odpowiedzi narratora.
+	Saves.save_current()
+
+# Kolejny numer żądania do modelu. Liczy się tylko najświeższe — gdyby gracz
+# zdążył wysłać dwie akcje, starsza odpowiedź nie może nadpisać nowszej.
+func _next_request() -> int:
+	_request_id += 1
+	return _request_id
+
+# Czy odpowiedź, na którą czekaliśmy, wciąż dotyczy tej samej rozgrywki.
+func _stale(my_session: int, my_request: int) -> bool:
+	if my_session != session_id or my_request != _request_id:
+		return true
+	return false
 
 # Wszystko, co Mistrz Gry zgłosił w bloku stanu, wchodzi do Kroniki jednym
 # wejściem. Dzięki temu scena otwierająca i kolejne tury nie rozjeżdżają się
@@ -586,7 +632,9 @@ func _should_roll(action: String) -> bool:
 
 # Modyfikator rzutu z atrybutu dobranego do rodzaju działania.
 # Atrybuty startują na 5 (mod 0); każdy pełny +2 ponad 5 daje +1 do rzutu.
-func _attr_modifier(action: String) -> int:
+# Który atrybut rozstrzyga daną próbę i o ile przechyla szalę.
+# Zwraca {"key": nazwa atrybutu albo "", "mod": modyfikator}.
+func _attr_test(action: String) -> Dictionary:
 	ensure_character_stats()
 	var attr := ""
 	match Narrator.classify(action):
@@ -599,8 +647,12 @@ func _attr_modifier(action: String) -> int:
 		"talk":
 			attr = "charyzma"
 		_:
-			return 0
-	return int(floor((int(character["attrs"].get(attr, 5)) - 5) / 2.0))
+			return {"key": "", "mod": 0}
+	var mod := int(floor((int(character["attrs"].get(attr, 5)) - 5) / 2.0))
+	return {"key": attr, "mod": mod}
+
+func _attr_modifier(action: String) -> int:
+	return int(_attr_test(action)["mod"])
 
 # ——— Kronika: dopisywanie miejsc, odkryć i wątków ——————————————
 
@@ -685,6 +737,8 @@ func from_dict(d: Dictionary) -> void:
 	discoveries = d.get("discoveries", [])
 	quests = d.get("quests", [])
 	npcs = d.get("npcs", [])
+	session_id += 1
+	busy = false
 	suggestions = d.get("suggestions", [])
 	summary = str(d.get("summary", ""))
 	facts = d.get("facts", [])

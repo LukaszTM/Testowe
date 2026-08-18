@@ -262,6 +262,10 @@ func _start() -> void:
 	c["weakness"] = _f["weakness"].text.strip_edges()
 	c["background"] = _f["background"].text.strip_edges()
 	c["avatar"] = _avatar_path
+	# Dwaj bohaterowie o tym samym imieniu to dwie różne postacie — bez własnego
+	# identyfikatora drugi nadpisywałby pierwszego w magazynie.
+	if str(c.get("id", "")).strip_edges() == "":
+		c["id"] = Saves.new_character_id()
 	Game.character = c
 	# Pierwszą scenę pisze Mistrz Gry — to zapytanie do modelu, więc trwa chwilę.
 	if is_instance_valid(_start_btn):

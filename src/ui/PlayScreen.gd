@@ -19,6 +19,7 @@ var _title: Label
 var _busy := false
 var _pending := ""      # akcja czekająca na rozegranie — wraca do pola po awarii
 var _failed := false
+var _nav: Array[Button] = []   # Kronika / Zapisz / Menu — blokowane na czas tury
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -143,9 +144,14 @@ func _build_right() -> void:
 		btn.add_theme_font_size_override("font_size", Ui.fs(17))
 		btn.pressed.connect(spec[1] as Callable)
 		row.add_child(btn)
+		_nav.append(btn)
 
 func _on_menu() -> void:
-	# Wyjście do menu zapisuje kronikę — nic nie przepada.
+	# Wyjście w połowie tury zostawiłoby akcję gracza bez odpowiedzi narratora,
+	# a wracająca odpowiedź trafiłaby już w inną rozgrywkę.
+	if Game.busy:
+		_warn("Trwa tura — poczekaj na Mistrza Gry.")
+		return
 	Saves.save_current()
 	Game.router.goto("menu")
 
@@ -217,6 +223,10 @@ func _set_busy(b: bool) -> void:
 	var dead := bool(Game.character.get("dead", false))
 	_send.disabled = b or dead
 	_input.editable = not b and not dead
+	# Zapis i wyjście w trakcie generowania utrwaliłyby połowę tury.
+	for btn in _nav:
+		if is_instance_valid(btn):
+			btn.disabled = b
 	if _failed:
 		return          # nie zamazuj powodu awarii
 	if dead:
@@ -251,8 +261,17 @@ func _render_log() -> void:
 			out += "[color=#6d4f12]➤ %s[/color]\n\n" % _esc(e["text"])
 		else:
 			if e.has("roll"):
+				# Pokazujemy też modyfikator — bez niego rozwój postaci jest
+				# niewidoczny i gracz nie wie, po co podnosi atrybuty.
 				var r: Dictionary = e["roll"]
-				out += "[color=#857055]🎲 rzut %d → %s[/color]\n" % [r["die"], r["tier"]]
+				var mod := int(r.get("mod", 0))
+				var bonus := ""
+				if mod != 0:
+					bonus = " %s %d (%s)" % ["+" if mod > 0 else "−", absi(mod),
+						str(r.get("attr", "atrybut"))]
+				out += "[color=#857055]🎲 k20: %d%s = %d → %s[/color]\n" % [
+					int(r.get("die", 0)), bonus,
+					int(r.get("total", r.get("die", 0))), str(r.get("tier", ""))]
 			var txt := _esc(e["text"])
 			if first_scene and txt.length() > 1:
 				# Iluminowany inicjał otwierający kronikę, jak w starej księdze.
@@ -561,11 +580,19 @@ func _section(host: VBoxContainer, title: String, items: Array,
 	host.add_child(Ui.hsep())
 
 func _on_save() -> void:
-	Saves.save_current()
-	_status.text = "Zapisano kronikę ✓"
+	# Komunikat musi odpowiadać temu, co naprawdę wylądowało na dysku.
+	# Wcześniej gra mówiła „zapisano” nawet wtedy, gdy pliku nie dało się
+	# otworzyć — gracz zamykał grę przekonany, że kronika jest bezpieczna.
+	if Saves.save_current():
+		_status.text = "Zapisano kronikę ✓"
+		_status.add_theme_color_override("font_color", Ui.GREEN)
+	else:
+		_warn("Nie udało się zapisać: %s" % Saves.last_error)
+		return
 	await get_tree().create_timer(2.0).timeout
-	if is_instance_valid(_status):
+	if is_instance_valid(_status) and not _failed:
 		_status.text = _mode_note()
+		_status.add_theme_color_override("font_color", Ui.MUTED)
 
 func _on_ai_state(available: bool, note: String) -> void:
 	if not is_instance_valid(_status) or _busy:

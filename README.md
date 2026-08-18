@@ -135,8 +135,8 @@ Pełne zestawienie materiałów wraz z ich pochodzeniem:
 [`ATTRIBUTION.md`](ATTRIBUTION.md).
 
 - **Muzyka** (`assets/music/`) — utwory autora projektu, stworzone w serwisie
-  AI Music Factory. Przed sprzedażą gry warto potwierdzić, że plan, na którym
-  powstały, obejmuje użycie komercyjne.
+  AI Music Factory na planie z prawami komercyjnymi. Użycie w grze sprzedawanej
+  odpłatnie jest dozwolone.
 
 - **Dźwięki** (`assets/audio/`) — wygenerowane na potrzeby projektu,
   możesz ich używać i podmieniać bez ograniczeń.

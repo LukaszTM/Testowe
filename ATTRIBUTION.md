@@ -39,17 +39,20 @@ praw.
 | `the_hollow_crown_1.mp3` | The Hollow Crown 1 | Łukasz TM | AI Music Factory (aimusicfactory.ai) |
 | `the_hollow_crown_2.mp3` | The Hollow Crown 2 | Łukasz TM | AI Music Factory (aimusicfactory.ai) |
 
-Oba utwory stworzył autor projektu w serwisie AI Music Factory. Prawa do nich
-przysługują autorowi projektu; nie są to materiały z biblioteki stockowej ani
-cudze nagrania, więc nie ma tu obowiązku podawania trzeciej strony.
+Oba utwory stworzył autor projektu w serwisie AI Music Factory. Nie są to
+materiały z biblioteki stockowej ani cudze nagrania, więc nie ma obowiązku
+podawania trzeciej strony.
 
-> **Jedna rzecz do potwierdzenia przed sprzedażą gry.** Serwisy generujące
-> muzykę zwykle wiążą prawa do użycia komercyjnego z rodzajem wykupionego
-> planu — na darmowym bywa ono wyłączone albo wymaga wzmianki o narzędziu.
-> Sprawdź w swoim regulaminie i podsumowaniu konta, czy plan, na którym
-> powstały te utwory, obejmuje użycie komercyjne. Jeśli tak, ten wpis jest
-> kompletny. Jeśli regulamin wymaga podania narzędzia — wiersz „Narzędzie”
-> powyżej to spełnia i wystarczy pokazać ten plik przy grze.
+**Użycie komercyjne: dozwolone.** Utwory powstały na aktywnym planie rocznym,
+do którego serwis przypisuje prawa komercyjne do całej wygenerowanej muzyki.
+Według panelu konta prawa te są bezterminowe i zostają przy autorze także
+wtedy, gdy subskrypcja nie zostanie odnowiona — obejmują utwory stworzone
+w okresie jej trwania. Gra może więc być sprzedawana z tą ścieżką dźwiękową.
+
+> Warto zachować dowód: zrzut ekranu z panelu subskrypcji (sekcja „Prawa
+> komercyjne”) oraz datę wygenerowania obu utworów. Prawa wynikają z konta
+> i okresu subskrypcji, a nie z samych plików — po latach łatwiej pokazać
+> potwierdzenie niż odtwarzać historię konta.
 
 Gra działa bez tych plików: wystarczy opróżnić `assets/music/`, a odtwarzacz
 po prostu zamilknie. Gracz może wtedy wrzucić własne utwory do katalogu

@@ -179,7 +179,7 @@ func _refresh_avatar_slot() -> void:
 		rm.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		rm.pressed.connect(func(): _avatar_path = ""; _refresh_avatar_slot())
 		_avatar_slot.add_child(rm)
-	var hint := Ui.subtle("PNG/JPG z dysku — obraz kopiuje się do danych gry. Bez obrazu postać dostaje medalion z inicjałami.", 12)
+	var hint := Ui.note("PNG/JPG z dysku — obraz kopiuje się do danych gry. Bez obrazu postać dostaje medalion z inicjałami.")
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_avatar_slot.add_child(hint)

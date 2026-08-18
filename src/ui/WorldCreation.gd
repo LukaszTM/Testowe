@@ -48,7 +48,7 @@ func _ready() -> void:
 	_mood = mood["edit"]
 	_mood.select(1)
 	col.add_child(mood["row"])
-	col.add_child(Ui.subtle("„Łagodna” prowadzi historię przyjaźnie i przygodowo, bez nagłej sensacji; „mroczna” od początku podnosi stawkę.", 12))
+	col.add_child(Ui.note("„Łagodna” prowadzi historię przyjaźnie i przygodowo, bez nagłej sensacji; „mroczna” od początku podnosi stawkę."))
 
 	var rand_btn := Ui.button("Losuj świat")
 	rand_btn.pressed.connect(_randomize_world)

@@ -361,7 +361,7 @@ func _render_attrs() -> void:
 	var pts := int(ch.get("attr_points", 0))
 	var attrs: Dictionary = ch.get("attrs", {})
 	if pts > 0:
-		var hint := Ui.subtle("masz %d pkt do rozdania" % pts, 12)
+		var hint := Ui.note("masz %d pkt do rozdania" % pts)
 		hint.add_theme_color_override("font_color", Ui.GOLD)
 		_attrs.add_child(hint)
 	for k in Game.ATTR_KEYS:
@@ -424,7 +424,7 @@ func _show_chronicle() -> void:
 			if str(f.get("waga", "")) == "kluczowy":
 				line.add_theme_color_override("font_color", Ui.GOLD)
 			inner.add_child(line)
-			inner.add_child(Ui.subtle("   tura %d" % int(f.get("tura", 0)), 12))
+			inner.add_child(Ui.note("   tura %d" % int(f.get("tura", 0))))
 		inner.add_child(Ui.hsep())
 
 	_section(inner, "MIEJSCA", Game.locations,
@@ -501,7 +501,7 @@ func _npc_tile(n: Dictionary) -> Control:
 		name_lbl.text = title_txt + " (%s)" % stan
 	v.add_child(name_lbl)
 	if str(n.get("relacja", "")) != "":
-		var rel := Ui.subtle(str(n.get("relacja", "")), 12)
+		var rel := Ui.note(str(n.get("relacja", "")))
 		rel.max_lines_visible = 2
 		v.add_child(rel)
 
@@ -545,14 +545,14 @@ func _show_npc_card(n: Dictionary) -> void:
 
 	col.add_child(Ui.hsep())
 	if str(n.get("plec", "")) != "":
-		col.add_child(Ui.subtle("PŁEĆ", 12))
+		col.add_child(Ui.note("PŁEĆ"))
 		col.add_child(Ui.body(str(n.get("plec", "")).capitalize()))
 	if str(n.get("stan", "")) != "":
-		col.add_child(Ui.subtle("STAN", 12))
+		col.add_child(Ui.note("STAN"))
 		col.add_child(Ui.body(str(n.get("stan", "")).capitalize()))
-	col.add_child(Ui.subtle("POZNANO", 12))
+	col.add_child(Ui.note("POZNANO"))
 	col.add_child(Ui.body("Tura %d" % int(n.get("tura", 0))))
-	col.add_child(Ui.subtle("RELACJA I UCZUCIA", 12))
+	col.add_child(Ui.note("RELACJA I UCZUCIA"))
 	var rel := Ui.body(str(n.get("relacja", "— jeszcze nieznane —")))
 	col.add_child(rel)
 
@@ -576,7 +576,7 @@ func _section(host: VBoxContainer, title: String, items: Array,
 			host.add_child(Ui.body("• " + str(name_fn.call(it))))
 			var note := str(note_fn.call(it))
 			if note != "":
-				host.add_child(Ui.subtle("   " + note, 12))
+				host.add_child(Ui.note("   " + note))
 	host.add_child(Ui.hsep())
 
 func _on_save() -> void:

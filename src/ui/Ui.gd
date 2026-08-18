@@ -15,10 +15,10 @@ const REF := Vector2(1672, 941)
 const M_TITLE   := Rect2(228, 288, 548, 150)   # kaligraficzny tytuł gry
 const M_MOTTO   := Rect2(228, 448, 548, 64)    # dewiza pod tytułem
 const M_BUTTONS := Rect2(900, 186, 456, 508)   # kolumna przycisków menu
-const M_HEAD    := Rect2(230, 104, 546, 52)    # nagłówek ekranu
-const M_BODY    := Rect2(228, 168, 546, 534)   # treść formularza
-const M_ACTIONS := Rect2(228, 712, 546, 72)    # listwa akcji
-const M_HINTS   := Rect2(890, 150, 470, 560)   # objaśnienia na prawej karcie
+const M_HEAD    := Rect2(252, 108, 496, 48)    # nagłówek ekranu
+const M_BODY    := Rect2(252, 172, 496, 520)   # treść formularza
+const M_ACTIONS := Rect2(252, 706, 496, 76)    # listwa akcji
+const M_HINTS   := Rect2(902, 162, 448, 536)   # objaśnienia na prawej karcie
 
 # ——— Obszary na płycie „rozgrywka” ————————————————————————————
 # Lewa karta to jedna duża rama; prawa ma cztery gotowe pola.
@@ -36,7 +36,7 @@ const P_BOX4    := Rect2(906, 654, 516, 110)   # stan i przyciski
 # ——— Paleta zdjęta z grafik ————————————————————————————————
 const INK         := Color("33261a")   # tekst na pergaminie
 const INK_SOFT    := Color("4a3722")   # tekst pomocniczy
-const MUTED       := Color("6b573a")   # podpisy — ciemniejsze niż w makiecie,
+const MUTED       := Color("5c4a2e")   # podpisy — ciemniejsze niż w makiecie,
                                        # bo pergamin w grze jest mocno zacieniony
 const LINE        := Color("a98f66")   # cienkie linie
 const PANEL       := Color("d8c8a4")   # pergamin (gdy trzeba go domalować)
@@ -45,6 +45,7 @@ const BG_SOFT     := Color("cbb995")
 const GOLD        := Color("8a6a1f")   # złoto czytelne na pergaminie
 const GOLD_BRIGHT := Color("d8b556")
 const GOLD_DIM    := Color("6e561f")
+const TITLE_INK   := Color("5a3c17")   # tytuł gry na jasnej karcie
 const WOOD        := Color("3b2a18")
 const WOOD_HI     := Color("50391f")
 const OXIDE       := Color("a33a22")   # zdrowie, ostrzeżenia
@@ -257,15 +258,10 @@ static func build_theme() -> Theme:
 
 	# Suwak: tor to rama paska, gałka wycięta z grafiki suwaka z paczki.
 	t.set_stylebox("slider", "HSlider", _sbt("bar_frame", 34, 0, 0, 23))
-	var grab := StyleBoxFlat.new()
-	grab.bg_color = Color("a8842e")
-	grab.set_corner_radius_all(7)
-	grab.content_margin_left = 0
-	grab.content_margin_right = 0
-	grab.content_margin_top = 7
-	grab.content_margin_bottom = 7
-	t.set_stylebox("grabber_area", "HSlider", grab)
-	t.set_stylebox("grabber_area_highlight", "HSlider", grab)
+	# Wypełnienie przebytej części suwaka rysowało się jako gruby, żółty pas
+	# na całą wysokość kontrolki i zabijało ozdobny tor. Zostaje sam tor i gałka.
+	t.set_stylebox("grabber_area", "HSlider", StyleBoxEmpty.new())
+	t.set_stylebox("grabber_area_highlight", "HSlider", StyleBoxEmpty.new())
 	var knob := art("slider_knob")
 	if knob:
 		t.set_icon("grabber", "HSlider", knob)
@@ -306,6 +302,9 @@ static func title(txt: String, size := 32) -> Label:
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	return l
 
+# Wielki, kaligraficzny tytuł. GOLD na jasnym pergaminie czytał się jako
+# oliwkowa żółć — tutaj idzie głęboka sepia z delikatnym rozjaśnieniem,
+# przez co litery wyglądają jak wypisane atramentem, a nie podświetlone.
 static func script_title(txt: String, size := 60) -> Label:
 	_load_fonts()
 	var l := Label.new()
@@ -315,7 +314,10 @@ static func script_title(txt: String, size := 60) -> Label:
 	elif _f_bold:
 		l.add_theme_font_override("font", _f_bold)
 	l.add_theme_font_size_override("font_size", fs(size))
-	l.add_theme_color_override("font_color", GOLD)
+	l.add_theme_color_override("font_color", TITLE_INK)
+	l.add_theme_color_override("font_shadow_color", Color(0.98, 0.93, 0.80, 0.55))
+	l.add_theme_constant_override("shadow_offset_x", -1)
+	l.add_theme_constant_override("shadow_offset_y", -1)
 	return l
 
 static func heading(txt: String, size := 21) -> Label:
@@ -355,6 +357,16 @@ static func subtle(txt: String, size := 15) -> Label:
 	l.text = txt
 	l.add_theme_font_size_override("font_size", fs(size))
 	l.add_theme_color_override("font_color", MUTED)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return l
+
+# Objaśnienie pod polem formularza. Drobny, blady tekst ginął na pergaminie
+# w cieniu — tu idzie większy stopień i mocniejszy atrament niż w subtle().
+static func note(txt: String) -> Label:
+	var l := Label.new()
+	l.text = txt
+	l.add_theme_font_size_override("font_size", fs(14))
+	l.add_theme_color_override("font_color", INK_SOFT)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return l
 
@@ -431,7 +443,7 @@ static func dropdown(label_txt: String, options: Array) -> Dictionary:
 	box.add_theme_constant_override("separation", 4)
 	box.add_child(field_label(label_txt))
 	var ob := OptionButton.new()
-	ob.custom_minimum_size = Vector2(0, 50)
+	ob.custom_minimum_size = Vector2(0, 46)
 	for o in options:
 		ob.add_item(str(o))
 	box.add_child(ob)

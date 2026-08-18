@@ -477,12 +477,15 @@ func _claude_request(system: String, messages: Array) -> String:
 	var res: Array = await _http.request_completed
 	var code := int(res[1])
 	var body := (res[3] as PackedByteArray).get_string_from_utf8()
-	if code == 401:
-		return _fail("Claude API odrzuciło klucz (401) — sprawdź go w Ustawieniach.")
-	if code == 429:
-		return _fail("Limit zapytań Claude API (429) — odczekaj chwilę i ponów turę.")
+
 	if code != 200:
-		return _fail("Claude API zwróciło błąd %d — tura nie została rozegrana." % code)
+		var why := ""
+		var parsed_err = JSON.parse_string(body)
+		if typeof(parsed_err) == TYPE_DICTIONARY:
+			var e = parsed_err.get("error", {})
+			if typeof(e) == TYPE_DICTIONARY:
+				why = str(e.get("message", ""))
+		return _fail(_explain(code, body, why))
 	var parsed = JSON.parse_string(body)
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return _fail("Nieczytelna odpowiedź Claude API — tura nie została rozegrana.")
@@ -564,13 +567,27 @@ func dev_test_claude(key: String, base: String, model: String) -> Dictionary:
 			msg = str(e.get("message", ""))
 	if msg == "":
 		msg = body.left(120)
-	var hint := ""
+	return {"ok": false, "note": _explain(code, body, msg)}
+
+# Tłumaczy odpowiedź serwera na zdanie, z którego widać, co zrobić.
+# Bramki zwracają własne kody — „brak środków” to nie jest usterka gry
+# i gracz nie powinien się tego domyślać z surowego JSON-a.
+func _explain(code: int, body: String, msg: String) -> String:
+	var low := (body + " " + msg).to_lower()
+	if low.contains("insufficient") and low.contains("balance"):
+		return "Konto w bramce API nie ma środków. Klucz i adres są poprawne — trzeba doładować konto u operatora."
+	if low.contains("model") and (low.contains("not found") or low.contains("unknown")):
+		return "Bramka nie zna modelu podanego w polu „Model”. Sprawdź jego nazwę u operatora."
 	match code:
-		401: hint = " (klucz odrzucony — sprawdź go)"
-		403: hint = " (brak uprawnień — sprawdź konto/saldo)"
-		404: hint = " (zły adres API albo nieznany model)"
-		429: hint = " (limit zapytań — spróbuj za chwilę)"
-	return {"ok": false, "note": "Błąd %d%s. %s" % [code, hint, msg.left(160)]}
+		401:
+			return "Klucz API odrzucony (401). Sprawdź, czy skopiowałeś go w całości."
+		403:
+			return "Brak uprawnień (403). Zwykle oznacza wyczerpane środki albo klucz bez dostępu do tego modelu. %s" % msg.left(120)
+		404:
+			return "Nie znaleziono punktu API (404). Sprawdź adres — powinien być samym adresem bramki, bez „/v1/messages”."
+		429:
+			return "Limit zapytań (429). Odczekaj chwilę i spróbuj ponownie."
+	return "Błąd %d. %s" % [code, msg.left(160)]
 
 # ——— Ollama (model lokalny na komputerze gracza) ———————————————
 

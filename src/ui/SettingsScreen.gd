@@ -84,7 +84,7 @@ func _ready() -> void:
 	_winmode.select({"windowed": 0, "borderless": 1, "fullscreen": 2}.get(Game.settings.get("window_mode", "windowed"), 0))
 	col.add_child(wm["row"])
 
-	col.add_child(Ui.subtle("W trybie „W oknie” i „Okno bez ramki” obowiązuje wybrana rozdzielczość; pełny ekran używa natywnej.", 12))
+	col.add_child(Ui.note("W trybie „W oknie” i „Okno bez ramki” obowiązuje wybrana rozdzielczość; pełny ekran używa natywnej."))
 
 	_intro = Ui.toggle("Animacja otwarcia księgi", bool(Game.settings.get("intro_on", true)))
 	col.add_child(_intro)
@@ -93,9 +93,9 @@ func _ready() -> void:
 	_intro_pace.select(_pace_index())
 	col.add_child(pace["row"])
 	if Intro.available():
-		col.add_child(Ui.subtle("Animację można pominąć dowolnym klawiszem.", 12))
+		col.add_child(Ui.note("Animację można pominąć dowolnym klawiszem."))
 	else:
-		col.add_child(Ui.subtle("Brak klatek animacji — gra startuje od razu w menu. Klatki wrzuca się do katalogu assets/intro.", 12))
+		col.add_child(Ui.note("Brak klatek animacji — gra startuje od razu w menu. Klatki wrzuca się do katalogu assets/intro."))
 
 	col.add_child(Ui.hsep())
 
@@ -142,7 +142,7 @@ func _ready() -> void:
 	open_dir.pressed.connect(func(): OS.shell_open(Audio.user_music_path()))
 	mrow.add_child(open_dir)
 
-	col.add_child(Ui.subtle("Utworów w bibliotece: %d. Własne kawałki (mp3 lub ogg) wystarczy wrzucić do katalogu „muzyka” — gra znajdzie je sama po zapisaniu ustawień." % Audio.track_count(), 12))
+	col.add_child(Ui.note("Utworów w bibliotece: %d. Własne kawałki (mp3 lub ogg) wystarczy wrzucić do katalogu „muzyka” — gra znajdzie je sama po zapisaniu ustawień." % Audio.track_count()))
 
 	col.add_child(Ui.hsep())
 
@@ -153,7 +153,7 @@ func _ready() -> void:
 	_dice = dice["edit"]
 	_dice.select({"risk": 0, "always": 1, "off": 2}.get(Game.settings.get("dice_mode", "risk"), 0))
 	col.add_child(dice["row"])
-	col.add_child(Ui.subtle("Kością rozstrzygamy tylko działania, w których coś realnie stawiasz na szali — nie zwykłe rozmowy czy rozglądanie się.", 12))
+	col.add_child(Ui.note("Kością rozstrzygamy tylko działania, w których coś realnie stawiasz na szali — nie zwykłe rozmowy czy rozglądanie się."))
 
 	col.add_child(Ui.hsep())
 
@@ -173,7 +173,7 @@ func _ready() -> void:
 	srow.add_child(_scale)
 	_scale_val = _value_label("%d%%" % int(round(_scale.value * 100)))
 	srow.add_child(_scale_val)
-	col.add_child(Ui.subtle("Zmiana wielkości tekstu zadziała po zapisaniu ustawień.", 12))
+	col.add_child(Ui.note("Zmiana wielkości tekstu zadziała po zapisaniu ustawień."))
 
 	col.add_child(Ui.hsep())
 
@@ -187,12 +187,12 @@ func _ready() -> void:
 	_mode.select({"offline": 0, "claude": 1, "ollama": 2, "ai": 2}.get(str(Game.settings.get("mode", "offline")), 0))
 	_mode.item_selected.connect(func(_i): _toggle_ai())
 	col.add_child(mode["row"])
-	col.add_child(Ui.subtle("Tryb offline składa sceny z gotowych zdań i rozpoznaje tylko rodzaj działania (rozglądanie, rozmowa, ruch, walka). Nadaje się do obejrzenia gry bez klucza API, ale nie prowadzi prawdziwej opowieści — do gry na dłużej wybierz Claude API.", 12))
+	col.add_child(Ui.note("Tryb offline składa sceny z gotowych zdań i rozpoznaje tylko rodzaj działania (rozglądanie, rozmowa, ruch, walka). Nadaje się do obejrzenia gry bez klucza API, ale nie prowadzi prawdziwej opowieści — do gry na dłużej wybierz Claude API."))
 
 	_claude_rows = VBoxContainer.new()
 	_claude_rows.add_theme_constant_override("separation", 10)
 	col.add_child(_claude_rows)
-	_claude_rows.add_child(Ui.subtle("Usługa w chmurze — nie stawiasz żadnego serwera i działa niezależnie od Twojego komputera. Klucz z platform.claude.com (oficjalne API Anthropic) albo ze zgodnej bramki, np. aiprimetech.io — wtedy wpisz jej adres poniżej. Klucz zapisuje się tylko lokalnie.", 12))
+	_claude_rows.add_child(Ui.note("Usługa w chmurze — nie stawiasz żadnego serwera i działa niezależnie od Twojego komputera. Klucz z platform.claude.com (oficjalne API Anthropic) albo ze zgodnej bramki, np. aiprimetech.io — wtedy wpisz jej adres poniżej. Klucz zapisuje się tylko lokalnie."))
 	var ckey := Ui.field("Klucz API", "sk-...", Game.settings.get("claude_api_key", ""))
 	_claude_key = ckey["edit"]
 	_claude_key.secret = true
@@ -200,8 +200,8 @@ func _ready() -> void:
 	var curl := Ui.field("Adres API", "https://api.anthropic.com", Game.settings.get("claude_base_url", "https://api.anthropic.com"))
 	_claude_url = curl["edit"]
 	_claude_rows.add_child(curl["row"])
-	_claude_rows.add_child(Ui.subtle("Oficjalne API: https://api.anthropic.com · AI Prime Tech: https://aiprimetech.io", 12))
-	var warn := Ui.subtle("Uwaga: klucz jest wysyłany pod podany adres i przechowywany zwykłym tekstem w pliku ustawień. Wpisuj wyłącznie adresy, którym ufasz — operator obcej bramki zobaczy Twój klucz oraz treść rozgrywki.", 12)
+	_claude_rows.add_child(Ui.note("Oficjalne API: https://api.anthropic.com · AI Prime Tech: https://aiprimetech.io"))
+	var warn := Ui.note("Uwaga: klucz jest wysyłany pod podany adres i przechowywany zwykłym tekstem w pliku ustawień. Wpisuj wyłącznie adresy, którym ufasz — operator obcej bramki zobaczy Twój klucz oraz treść rozgrywki.")
 	warn.add_theme_color_override("font_color", Ui.OXIDE)
 	_claude_rows.add_child(warn)
 	var cmodel := Ui.field("Model", "claude-opus-5", Game.settings.get("claude_model", "claude-opus-5"))

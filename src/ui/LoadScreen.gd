@@ -57,7 +57,7 @@ func _row(s: Dictionary) -> Control:
 	info.add_child(Ui.heading(s["name"], 19))
 	info.add_child(Ui.subtle("%s · bohater: %s · tura %d" % [s["genre"], s["hero"], s["turn"]], 13))
 	if s.get("saved_at", "") != "":
-		info.add_child(Ui.subtle("zapis: %s" % s["saved_at"], 12))
+		info.add_child(Ui.note("zapis: %s" % s["saved_at"]))
 
 	var load_btn := Ui.small_button("Wczytaj", true)
 	load_btn.custom_minimum_size = Vector2(140, 48)
@@ -110,7 +110,7 @@ func _broken_row(s: Dictionary) -> Control:
 	info.add_child(head)
 	info.add_child(Ui.subtle(str(s.get("name", "")), 13))
 	if bool(s.get("backup", false)):
-		info.add_child(Ui.subtle("Jest kopia bezpieczeństwa — „Wczytaj” spróbuje z niej odtworzyć kronikę.", 12))
+		info.add_child(Ui.note("Jest kopia bezpieczeństwa — „Wczytaj” spróbuje z niej odtworzyć kronikę."))
 		var try_btn := Ui.small_button("Wczytaj", true)
 		try_btn.custom_minimum_size = Vector2(140, 48)
 		try_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -121,6 +121,6 @@ func _broken_row(s: Dictionary) -> Control:
 				_populate())
 		box.add_child(try_btn)
 	else:
-		info.add_child(Ui.subtle("Brak kopii bezpieczeństwa. Tej kroniki nie da się już odtworzyć.", 12))
+		info.add_child(Ui.note("Brak kopii bezpieczeństwa. Tej kroniki nie da się już odtworzyć."))
 	box.add_child(_delete_button(s))
 	return card

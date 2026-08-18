@@ -16,6 +16,10 @@ signal finished
 const DIR := "res://assets/intro"
 const EXT := [".png", ".jpg", ".jpeg", ".webp"]
 const AHEAD := 5          # ile klatek wczytujemy z wyprzedzeniem
+# Krótkie wygaszenie na końcu. Menu jest już zbudowane pod spodem, więc
+# animacja po prostu w nie przechodzi — a drobna różnica między ostatnią
+# klatką a tłem menu przestaje być widoczna jako przeskok.
+const FADE_OUT := 0.35
 
 var _paths: Array = []
 var _cache := {}          # indeks klatki -> Texture2D
@@ -99,7 +103,7 @@ func _process(delta: float) -> void:
 		_elapsed -= _spf
 		_index += 1
 		if _index >= _paths.size():
-			_close()
+			_finish_with_fade()
 			return
 		var tex: Texture2D = _take(_index)
 		if tex:
@@ -107,6 +111,15 @@ func _process(delta: float) -> void:
 		# Klatka odegrana już nie wróci — puszczamy ją, żeby pamięć nie rosła.
 		_cache.erase(_index - 2)
 		_request(_index + AHEAD)
+
+# Ostatnia klatka zostaje na ekranie i płynnie ustępuje miejsca menu.
+func _finish_with_fade() -> void:
+	if _closed:
+		return
+	set_process(false)
+	var tw := create_tween()
+	tw.tween_property(self, "modulate:a", 0.0, FADE_OUT)
+	tw.tween_callback(_close)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _closed:

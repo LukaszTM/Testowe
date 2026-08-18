@@ -20,12 +20,25 @@ w tym w grze sprzedawanej odpłatnie.
 
 ## Grafiki interfejsu (`assets/ui/`)
 
-Przygotowane z paczki **Kronikarz Asset Pack Extended**, dostarczonej przez
-autora projektu. Skrypt `tools/build_ui.py` je przycina, skaluje i dorabia
-wypełnienia pasków.
+Paczka **Kronikarz Asset Pack Extended** — tła księgi, okucia przycisków, ramy,
+paski i ornamenty. Wykonał ją autor projektu w ChatGPT (OpenAI, plan Pro).
+Skrypt `tools/build_ui.py` przycina je, skaluje i dorabia wypełnienia pasków.
 
-> **Do uzupełnienia przed publikacją.** Autor projektu musi potwierdzić, na
-> jakiej licencji otrzymał tę paczkę i czy wolno jej używać komercyjnie.
+**Użycie komercyjne: dozwolone.** Regulamin OpenAI przenosi na użytkownika
+prawa do wygenerowanych materiałów i nie zabrania używania ich zarobkowo ani
+nie wymaga podawania narzędzia. Gra może być sprzedawana z tą oprawą graficzną.
+
+> **Czym to się różni od muzyki.** Prawo autorskie w Polsce i UE chroni utwory
+> o twórczym, ludzkim charakterze. Materiał wygenerowany przez model może więc
+> nie być chroniony prawem autorskim w ogóle. Nie przeszkadza to sprzedawać
+> gry — wolno używać takiej grafiki bez ograniczeń. Oznacza natomiast, że
+> prawdopodobnie nie da się zakazać komuś użycia identycznej lub bardzo
+> podobnej grafiki. Przy oprawie UI ryzyko jest niewielkie; gdyby te grafiki
+> miały kiedyś stanowić znak rozpoznawczy marki (logo, okładka sklepowa),
+> warto je domalować ręcznie albo zlecić grafikowi.
+>
+> To informacja praktyczna, nie porada prawna. Przed komercyjną premierą
+> najlepiej potwierdzić stan rzeczy u prawnika.
 
 ## Dźwięki interfejsu (`assets/audio/`)
 

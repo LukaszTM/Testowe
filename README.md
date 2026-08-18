@@ -131,12 +131,16 @@ Dołączone zasoby również nadają się do użytku komercyjnego:
 
 - **Czcionki Great Vibes, Almendra i EB Garamond** — licencja SIL Open Font
   License 1.1 (patrz [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt)).
-Pełne zestawienie materiałów wraz z ich pochodzeniem:
-[`ATTRIBUTION.md`](ATTRIBUTION.md).
+
+- **Grafiki interfejsu** (`assets/ui/`) — wykonane przez autora projektu
+  w ChatGPT (OpenAI, plan Pro). Regulamin przenosi prawa do wyniku na
+  użytkownika i nie wymaga podawania narzędzia.
 
 - **Muzyka** (`assets/music/`) — utwory autora projektu, stworzone w serwisie
-  AI Music Factory na planie z prawami komercyjnymi. Użycie w grze sprzedawanej
-  odpłatnie jest dozwolone.
+  AI Music Factory na planie z prawami komercyjnymi, bezterminowymi.
 
 - **Dźwięki** (`assets/audio/`) — wygenerowane na potrzeby projektu,
   możesz ich używać i podmieniać bez ograniczeń.
+
+Pełne zestawienie materiałów wraz z pochodzeniem i zastrzeżeniami:
+[`ATTRIBUTION.md`](ATTRIBUTION.md).

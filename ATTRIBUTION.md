@@ -34,18 +34,23 @@ praw.
 
 ## Muzyka (`assets/music/`)
 
-| Plik | Tytuł | Autor | Licencja |
+| Plik | Tytuł | Autor | Narzędzie |
 |---|---|---|---|
-| `the_hollow_crown_1.mp3` | The Hollow Crown 1 | — | **do ustalenia** |
-| `the_hollow_crown_2.mp3` | The Hollow Crown 2 | — | **do ustalenia** |
+| `the_hollow_crown_1.mp3` | The Hollow Crown 1 | Łukasz TM | AI Music Factory (aimusicfactory.ai) |
+| `the_hollow_crown_2.mp3` | The Hollow Crown 2 | Łukasz TM | AI Music Factory (aimusicfactory.ai) |
 
-> **Do uzupełnienia przed publikacją.** Utwory dostarczył autor projektu i nie
-> dołączono do nich informacji licencyjnej. Przed jakąkolwiek publikacją —
-> także darmową — trzeba wpisać tu autora i licencję (albo potwierdzić własne
-> prawa autorskie). Jeżeli utwory pochodzą z generatora muzyki, obowiązują
-> warunki jego regulaminu; jeżeli z biblioteki stockowej — warunki tej
-> biblioteki, zwykle łącznie z obowiązkiem podania autora.
->
-> Gra działa bez tych plików: wystarczy usunąć zawartość `assets/music/`,
-> a odtwarzacz po prostu zamilknie. Gracz może wtedy wrzucić własne utwory do
-> katalogu `muzyka` w danych gry.
+Oba utwory stworzył autor projektu w serwisie AI Music Factory. Prawa do nich
+przysługują autorowi projektu; nie są to materiały z biblioteki stockowej ani
+cudze nagrania, więc nie ma tu obowiązku podawania trzeciej strony.
+
+> **Jedna rzecz do potwierdzenia przed sprzedażą gry.** Serwisy generujące
+> muzykę zwykle wiążą prawa do użycia komercyjnego z rodzajem wykupionego
+> planu — na darmowym bywa ono wyłączone albo wymaga wzmianki o narzędziu.
+> Sprawdź w swoim regulaminie i podsumowaniu konta, czy plan, na którym
+> powstały te utwory, obejmuje użycie komercyjne. Jeśli tak, ten wpis jest
+> kompletny. Jeśli regulamin wymaga podania narzędzia — wiersz „Narzędzie”
+> powyżej to spełnia i wystarczy pokazać ten plik przy grze.
+
+Gra działa bez tych plików: wystarczy opróżnić `assets/music/`, a odtwarzacz
+po prostu zamilknie. Gracz może wtedy wrzucić własne utwory do katalogu
+`muzyka` w danych gry.

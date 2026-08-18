@@ -131,9 +131,12 @@ Dołączone zasoby również nadają się do użytku komercyjnego:
 
 - **Czcionki Great Vibes, Almendra i EB Garamond** — licencja SIL Open Font
   License 1.1 (patrz [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt)).
-Pełne zestawienie materiałów wraz z ich pochodzeniem: [`ATTRIBUTION.md`](ATTRIBUTION.md).
-Muzyka w `assets/music/` **nie ma jeszcze ustalonej licencji** — trzeba ją
-uzupełnić przed publikacją.
+Pełne zestawienie materiałów wraz z ich pochodzeniem:
+[`ATTRIBUTION.md`](ATTRIBUTION.md).
+
+- **Muzyka** (`assets/music/`) — utwory autora projektu, stworzone w serwisie
+  AI Music Factory. Przed sprzedażą gry warto potwierdzić, że plan, na którym
+  powstały, obejmuje użycie komercyjne.
 
 - **Dźwięki** (`assets/audio/`) — wygenerowane na potrzeby projektu,
   możesz ich używać i podmieniać bez ograniczeń.

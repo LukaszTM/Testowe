@@ -123,6 +123,19 @@ w Ustawieniach; animację można pominąć dowolnym klawiszem.
 Klatki wczytują się strumieniowo, kilka do przodu i w tle — czterdzieści
 kadrów pełnoekranowych trzymanych naraz zajęłoby ćwierć gigabajta pamięci.
 
+## Numeracja wersji
+
+Numer wersji stoi w jednym miejscu — `project.godot`, sekcja
+`application/config/version`. Stamtąd bierze go preset eksportu i napis
+w menu głównym.
+
+- **0.x.y** — wersje rozwojowe. Gra działa i da się w nią grać, ale zakres
+  i zachowania jeszcze się zmieniają.
+- **1.0.0** — pierwsza wersja uznana za gotową do wydania: bez znanych
+  usterek psujących rozgrywkę, z domkniętą mechaniką i pełną dokumentacją.
+- Powyżej 1.0.0 obowiązuje zwykła zasada: trzecia liczba to poprawki,
+  druga — nowe możliwości, pierwsza — zmiany łamiące zgodność zapisów.
+
 ## Testy
 
 Zestaw testów jednostkowych uruchamia się bez okna gry:

@@ -1,0 +1,325 @@
+class_name SettingsScreen
+extends Control
+
+var _mode: OptionButton
+var _claude_key: LineEdit
+var _claude_url: LineEdit
+var _claude_model: LineEdit
+var _claude_rows: VBoxContainer
+var _host: LineEdit
+var _model: LineEdit
+var _ollama_rows: VBoxContainer
+var _dice: OptionButton
+var _res: OptionButton
+var _winmode: OptionButton
+var _sfx: CheckBox
+var _intro: CheckBox
+var _intro_pace: OptionButton
+var _music: CheckBox
+var _music_vol: HSlider
+var _music_vol_val: Label
+var _scale: HSlider
+var _scale_val: Label
+
+# Test połączenia — tylko w wersji deweloperskiej (patrz _dev_test_row).
+var _test_btn: Button
+var _test_result: Label
+
+var _res_values: Array = []
+# Kopia ustawień dźwięku sprzed podglądu — do przywrócenia po „Wstecz”.
+var _audio_before := {}
+
+# Tempo otwarcia księgi — sekundy dla kolejnych pozycji listy.
+const PACE := [1.2, 1.6, 2.0]
+
+func _pace_index() -> int:
+	var v := float(Game.settings.get("intro_seconds", 1.6))
+	var best := 1
+	for i in range(PACE.size()):
+		if absf(PACE[i] - v) < absf(PACE[best] - v):
+			best = i
+	return best
+
+func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_audio_before = {
+		"music_on": Game.settings.get("music_on", true),
+		"music_volume": Game.settings.get("music_volume", 0.55),
+	}
+	add_child(Ui.title_bar("Ustawienia"))
+	add_child(Ui.hint_page("Co tu ustawisz", [
+		"# Obraz",
+		"Gra rysuje się zawsze w tej samej przestrzeni i skaluje do okna, więc każda rozdzielczość pokazuje ten sam układ księgi.",
+		"# Wielkość tekstu",
+		"Podnieś, jeśli czytasz z daleka albo na dużym ekranie. Działa po zapisaniu.",
+		"# Muzyka",
+		"Utwory lecą w losowej kolejności, przenikając jeden w drugi. Możesz dorzucić własne.",
+		"# Mistrz Gry",
+		"Offline to prosta narracja proceduralna. Claude API prowadzi pełną rozgrywkę: tworzy postacie, ich dialogi i reaguje na Twoje decyzje.",
+		"# Klucz API",
+		"Zapisuje się tylko na tym komputerze, w pliku ustawień.",
+	]))
+	var c := Ui.scroll_column(Ui.M_BODY, 12)
+	add_child(c["host"])
+	var col: VBoxContainer = c["box"]
+
+
+	# ——— Obraz ———
+	col.add_child(Ui.heading("Obraz", 19))
+	var res_labels: Array = []
+	_res_values = Game.available_resolutions()
+	var native := Game.native_resolution()
+	for r in _res_values:
+		var lbl := "%d × %d" % [r.x, r.y]
+		if r == native:
+			lbl += "  (natywna)"
+		res_labels.append(lbl)
+	var res := Ui.dropdown("Rozdzielczość", res_labels)
+	_res = res["edit"]
+	_res.select(_current_res_index())
+	col.add_child(res["row"])
+
+	var wm := Ui.dropdown("Tryb okna", ["W oknie", "Okno bez ramki", "Pełny ekran"])
+	_winmode = wm["edit"]
+	_winmode.select({"windowed": 0, "borderless": 1, "fullscreen": 2}.get(Game.settings.get("window_mode", "windowed"), 0))
+	col.add_child(wm["row"])
+
+	col.add_child(Ui.note("W trybie „W oknie” i „Okno bez ramki” obowiązuje wybrana rozdzielczość; pełny ekran używa natywnej."))
+
+	_intro = Ui.toggle("Animacja otwarcia księgi", bool(Game.settings.get("intro_on", true)))
+	col.add_child(_intro)
+	var pace := Ui.dropdown("Tempo otwarcia", ["Szybkie (1,2 s)", "Naturalne (1,6 s)", "Dostojne (2,0 s)"])
+	_intro_pace = pace["edit"]
+	_intro_pace.select(_pace_index())
+	col.add_child(pace["row"])
+	if Intro.available():
+		col.add_child(Ui.note("Animację można pominąć dowolnym klawiszem."))
+	else:
+		col.add_child(Ui.note("Brak klatek animacji — gra startuje od razu w menu. Klatki wrzuca się do katalogu assets/intro."))
+
+	col.add_child(Ui.hsep())
+
+	# ——— Dźwięk ———
+	col.add_child(Ui.heading("Dźwięk", 19))
+	_sfx = Ui.toggle("Dźwięki przycisków", bool(Game.settings.get("sfx_on", true)))
+	col.add_child(_sfx)
+
+	_music = Ui.toggle("Muzyka", bool(Game.settings.get("music_on", true)))
+	# Włącznik działa od razu — słychać, co się ustawia.
+	_music.toggled.connect(func(on):
+		Game.settings["music_on"] = on
+		Audio.apply_settings())
+	col.add_child(_music)
+
+	col.add_child(Ui.subtle("GŁOŚNOŚĆ MUZYKI", 14))
+	var vrow := HBoxContainer.new()
+	vrow.add_theme_constant_override("separation", 14)
+	col.add_child(vrow)
+	_music_vol = HSlider.new()
+	_music_vol.min_value = 0.0
+	_music_vol.max_value = 1.0
+	_music_vol.step = 0.05
+	_music_vol.value = float(Game.settings.get("music_volume", 0.55))
+	_music_vol.custom_minimum_size = Vector2(0, 46)
+	_music_vol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_music_vol.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_music_vol.value_changed.connect(func(v):
+		_music_vol_val.text = "%d%%" % int(round(v * 100))
+		Audio.preview_volume(v))
+	vrow.add_child(_music_vol)
+	_music_vol_val = _value_label("%d%%" % int(round(_music_vol.value * 100)))
+	vrow.add_child(_music_vol_val)
+
+	var mrow := HBoxContainer.new()
+	mrow.add_theme_constant_override("separation", 12)
+	col.add_child(mrow)
+	var skip := Ui.small_button("Następny utwór")
+	skip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	skip.pressed.connect(func(): Audio.skip())
+	mrow.add_child(skip)
+	var open_dir := Ui.small_button("Katalog z muzyką")
+	open_dir.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	open_dir.pressed.connect(func(): OS.shell_open(Audio.user_music_path()))
+	mrow.add_child(open_dir)
+
+	col.add_child(Ui.note("Utworów w bibliotece: %d. Własne kawałki (mp3 lub ogg) wystarczy wrzucić do katalogu „muzyka” — gra znajdzie je sama po zapisaniu ustawień." % Audio.track_count()))
+
+	col.add_child(Ui.hsep())
+
+	# ——— Rozgrywka ———
+	col.add_child(Ui.heading("Rozgrywka", 19))
+	var dice := Ui.dropdown("Rzuty kością", [
+		"Tylko przy starciach i ryzyku (zalecane)", "Zawsze", "Nigdy"])
+	_dice = dice["edit"]
+	_dice.select({"risk": 0, "always": 1, "off": 2}.get(Game.settings.get("dice_mode", "risk"), 0))
+	col.add_child(dice["row"])
+	col.add_child(Ui.note("Kością rozstrzygamy tylko działania, w których coś realnie stawiasz na szali — nie zwykłe rozmowy czy rozglądanie się."))
+
+	col.add_child(Ui.hsep())
+
+	# ——— Tekst ———
+	col.add_child(Ui.subtle("WIELKOŚĆ TEKSTU", 13))
+	var srow := HBoxContainer.new()
+	srow.add_theme_constant_override("separation", 12)
+	col.add_child(srow)
+	_scale = HSlider.new()
+	_scale.min_value = 0.85
+	_scale.max_value = 1.4
+	_scale.step = 0.05
+	_scale.value = float(Game.settings.get("font_scale", 1.0))
+	_scale.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scale.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_scale.value_changed.connect(func(v): _scale_val.text = "%d%%" % int(round(v * 100)))
+	srow.add_child(_scale)
+	_scale_val = _value_label("%d%%" % int(round(_scale.value * 100)))
+	srow.add_child(_scale_val)
+	col.add_child(Ui.note("Zmiana wielkości tekstu zadziała po zapisaniu ustawień."))
+
+	col.add_child(Ui.hsep())
+
+	# ——— Mistrz Gry ———
+	col.add_child(Ui.heading("Mistrz Gry", 19))
+	var mode := Ui.dropdown("Kto prowadzi opowieść", [
+		"Offline — tryb demonstracyjny, narracja ze schematów",
+		"Claude API — pełny Mistrz Gry w chmurze (zalecane)",
+		"Ollama — model lokalny na tym komputerze"])
+	_mode = mode["edit"]
+	_mode.select({"offline": 0, "claude": 1, "ollama": 2, "ai": 2}.get(str(Game.settings.get("mode", "offline")), 0))
+	_mode.item_selected.connect(func(_i): _toggle_ai())
+	col.add_child(mode["row"])
+	col.add_child(Ui.note("Tryb offline składa sceny z gotowych zdań i rozpoznaje tylko rodzaj działania (rozglądanie, rozmowa, ruch, walka). Nadaje się do obejrzenia gry bez klucza API, ale nie prowadzi prawdziwej opowieści — do gry na dłużej wybierz Claude API."))
+
+	_claude_rows = VBoxContainer.new()
+	_claude_rows.add_theme_constant_override("separation", 10)
+	col.add_child(_claude_rows)
+	_claude_rows.add_child(Ui.note("Usługa w chmurze — nie stawiasz żadnego serwera i działa niezależnie od Twojego komputera. Klucz z platform.claude.com (oficjalne API Anthropic) albo ze zgodnej bramki, np. aiprimetech.io — wtedy wpisz jej adres poniżej. Klucz zapisuje się tylko lokalnie."))
+	var ckey := Ui.field("Klucz API", "sk-...", Game.settings.get("claude_api_key", ""))
+	_claude_key = ckey["edit"]
+	_claude_key.secret = true
+	_claude_rows.add_child(ckey["row"])
+	var curl := Ui.field("Adres API", "https://api.anthropic.com", Game.settings.get("claude_base_url", "https://api.anthropic.com"))
+	_claude_url = curl["edit"]
+	_claude_rows.add_child(curl["row"])
+	_claude_rows.add_child(Ui.note("Oficjalne API: https://api.anthropic.com · AI Prime Tech: https://aiprimetech.io"))
+	var warn := Ui.note("Uwaga: klucz jest wysyłany pod podany adres i przechowywany zwykłym tekstem w pliku ustawień. Wpisuj wyłącznie adresy, którym ufasz — operator obcej bramki zobaczy Twój klucz oraz treść rozgrywki.")
+	warn.add_theme_color_override("font_color", Ui.OXIDE)
+	_claude_rows.add_child(warn)
+	var cmodel := Ui.field("Model", "claude-opus-5", Game.settings.get("claude_model", "claude-opus-5"))
+	_claude_model = cmodel["edit"]
+	_claude_rows.add_child(cmodel["row"])
+
+	# Przycisk testu połączenia jest narzędziem deweloperskim. Zamiast pamiętać
+	# o jego usunięciu przed premierą, sam znika w zbudowanej wersji gry.
+	if OS.is_debug_build():
+		_claude_rows.add_child(_dev_test_row())
+
+	_ollama_rows = VBoxContainer.new()
+
+	_ollama_rows.add_theme_constant_override("separation", 10)
+	col.add_child(_ollama_rows)
+	var host := Ui.field("Adres Ollamy", "http://localhost:11434", Game.settings.get("ai_host", "http://localhost:11434"))
+	_host = host["edit"]
+	_ollama_rows.add_child(host["row"])
+	var model := Ui.field("Nazwa modelu", "np. bielik, llama3", Game.settings.get("ai_model", "bielik"))
+	_model = model["edit"]
+	_ollama_rows.add_child(model["row"])
+
+	col.add_child(Ui.spacer(10))
+	var bar := Ui.action_bar()
+	add_child(bar["host"])
+	var row: HBoxContainer = bar["row"]
+	var back := Ui.button("Wstecz")
+	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Muzyka reaguje od razu na przełącznik i suwak, żeby było słychać, co się
+	# ustawia. „Wstecz” musi więc cofnąć również ten podgląd — inaczej rezygnacja
+	# z zapisu i tak zmieniałaby ustawienia.
+	back.pressed.connect(func():
+		Game.settings["music_on"] = _audio_before.get("music_on", true)
+		Game.settings["music_volume"] = _audio_before.get("music_volume", 0.55)
+		Audio.apply_settings()
+		Game.router.goto("menu"))
+	row.add_child(back)
+	var save := Ui.button("Zapisz ustawienia", true)
+	save.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	save.pressed.connect(_save)
+	row.add_child(save)
+
+	_toggle_ai()
+
+# Etykieta wartości (np. „%”) bez zawijania — stała szerokość, do rzędów z suwakiem.
+func _value_label(txt: String) -> Label:
+	var l := Label.new()
+	l.text = txt
+	l.custom_minimum_size = Vector2(52, 0)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	l.add_theme_color_override("font_color", Ui.INK_SOFT)
+	return l
+
+func _current_res_index() -> int:
+	var cur := str(Game.settings.get("resolution", "1280x720"))
+	for i in range(_res_values.size()):
+		var r: Vector2i = _res_values[i]
+		if "%dx%d" % [r.x, r.y] == cur:
+			return i
+	return 0
+
+func _toggle_ai() -> void:
+	_claude_rows.visible = _mode.selected == 1
+	_ollama_rows.visible = _mode.selected == 2
+
+# Wiersz z testem połączenia. Budowany tylko w wersji deweloperskiej —
+# OS.is_debug_build() jest fałszywe w wyeksportowanej grze, więc gracz go
+# nigdy nie zobaczy i nie trzeba pamiętać o wycinaniu kodu przed premierą.
+func _dev_test_row() -> Control:
+	var trow := HBoxContainer.new()
+	trow.add_theme_constant_override("separation", 12)
+	_test_btn = Ui.small_button("Testuj połączenie")
+	_test_btn.custom_minimum_size = Vector2(240, 48)
+	_test_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_test_btn.pressed.connect(_on_test_api)
+	trow.add_child(_test_btn)
+	_test_result = Ui.subtle("", 13)
+	_test_result.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_test_result.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	trow.add_child(_test_result)
+	return trow
+
+func _on_test_api() -> void:
+	_test_btn.disabled = true
+	_test_result.add_theme_color_override("font_color", Ui.MUTED)
+	_test_result.text = "Testuję połączenie…"
+	var r: Dictionary = await Narrator.dev_test_claude(
+		_claude_key.text, _claude_url.text, _claude_model.text)
+	_test_result.text = str(r.get("note", ""))
+	_test_result.add_theme_color_override("font_color",
+		Ui.GREEN if bool(r.get("ok", false)) else Ui.OXIDE)
+	_test_btn.disabled = false
+
+func _save() -> void:
+	Game.settings["mode"] = ["offline", "claude", "ollama"][_mode.selected]
+	Game.settings["claude_api_key"] = _claude_key.text.strip_edges()
+	var cu := _claude_url.text.strip_edges().rstrip("/")
+	Game.settings["claude_base_url"] = cu if cu != "" else "https://api.anthropic.com"
+	var cm := _claude_model.text.strip_edges()
+	Game.settings["claude_model"] = cm if cm != "" else "claude-opus-5"
+	Game.settings["ai_host"] = _host.text.strip_edges()
+	Game.settings["ai_model"] = _model.text.strip_edges()
+	Game.settings["dice_mode"] = ["risk", "always", "off"][_dice.selected]
+	Game.settings["window_mode"] = ["windowed", "borderless", "fullscreen"][_winmode.selected]
+	if _res_values.size() > 0:
+		var r: Vector2i = _res_values[clampi(_res.selected, 0, _res_values.size() - 1)]
+		Game.settings["resolution"] = "%dx%d" % [r.x, r.y]
+	Game.settings["sfx_on"] = _sfx.button_pressed
+	Game.settings["intro_on"] = _intro.button_pressed
+	Game.settings["intro_seconds"] = PACE[clampi(_intro_pace.selected, 0, PACE.size() - 1)]
+	Game.settings["music_on"] = _music.button_pressed
+	Game.settings["music_volume"] = _music_vol.value
+	Game.settings["font_scale"] = _scale.value
+
+	Ui.scale = _scale.value
+	Game.save_settings()
+	Game.apply_display()
+	Audio.apply_settings()
+	if Game.router:
+		(Game.router as Control).theme = Ui.build_theme()
+	Game.router.goto("menu")

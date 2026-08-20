@@ -1,0 +1,18 @@
+# Godot 4
+.godot/
+.import/
+export.cfg
+export_presets.cfg.local
+
+# Wyeksportowane binaria
+/build/
+/dist/
+*.exe
+*.pck
+*.zip
+*.dmg
+*.x86_64
+
+# System
+.DS_Store
+Thumbs.db

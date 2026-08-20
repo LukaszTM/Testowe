@@ -10,9 +10,10 @@ var _arch: OptionButton
 var _arch_custom: LineEdit
 var _avatar_path := ""
 var _avatar_slot: HBoxContainer
-var _fd: FileDialog
 var _start_btn: Button
 var _error_lbl: Label
+
+const AVATAR_FILTERS := PackedStringArray(["*.png, *.jpg, *.jpeg, *.webp ; Obrazy"])
 
 const TRAITS := ["nieufny", "honorowy", "porywczy", "wyrachowany", "lojalny", "cyniczny",
 	"ciekawski", "opanowany", "brawurowy", "skryty", "uparty", "ironiczny"]
@@ -79,12 +80,6 @@ func _ready() -> void:
 	_avatar_slot = HBoxContainer.new()
 	_avatar_slot.add_theme_constant_override("separation", 12)
 	col.add_child(_avatar_slot)
-	_fd = FileDialog.new()
-	_fd.access = FileDialog.ACCESS_FILESYSTEM
-	_fd.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-	_fd.filters = ["*.png, *.jpg, *.jpeg, *.webp ; Obrazy"]
-	_fd.file_selected.connect(_on_avatar_picked)
-	add_child(_fd)
 	_refresh_avatar_slot()
 
 	_f["traits"] = _add(col, Ui.field("Cechy", "trzy przymiotniki, które ją definiują"))
@@ -171,7 +166,7 @@ func _refresh_avatar_slot() -> void:
 	var pick := Ui.button("Wybierz obraz…")
 	pick.custom_minimum_size = Vector2(180, 44)
 	pick.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	pick.pressed.connect(func(): _fd.popup_centered(Vector2i(760, 520)))
+	pick.pressed.connect(_choose_avatar)
 	_avatar_slot.add_child(pick)
 	if _avatar_path != "":
 		var rm := Ui.button("Usuń")
@@ -184,9 +179,16 @@ func _refresh_avatar_slot() -> void:
 	hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_avatar_slot.add_child(hint)
 
+func _choose_avatar() -> void:
+	Ui.pick_file(self, "Wybierz obraz postaci", AVATAR_FILTERS, _on_avatar_picked)
+
 func _on_avatar_picked(path: String) -> void:
+	# Systemowe okno wraca asynchronicznie — ekran mógł już zniknąć.
+	if not is_inside_tree():
+		return
 	var img := Image.load_from_file(path)
 	if img == null:
+		_warn_avatar("Nie udało się otworzyć tego obrazu.")
 		return
 	# Przeskaluj do sensownego rozmiaru i zapisz kopię w danych gry.
 	var m := maxi(img.get_width(), img.get_height())
@@ -198,6 +200,12 @@ func _on_avatar_picked(path: String) -> void:
 	if img.save_png(dst) == OK:
 		_avatar_path = dst
 		_refresh_avatar_slot()
+	else:
+		_warn_avatar("Nie udało się zapisać obrazu w danych gry.")
+
+func _warn_avatar(msg: String) -> void:
+	if _error_lbl != null:
+		_error_lbl.text = msg
 
 # ——— Magazyn postaci ————————————————————————————————————————
 

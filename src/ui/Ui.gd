@@ -683,3 +683,50 @@ static func box(r: Rect2, head := "", sep := 6) -> Dictionary:
 		l.add_theme_color_override("font_color", MUTED)
 		(c["box"] as VBoxContainer).add_child(l)
 	return {"host": c["host"], "box": c["box"], "scroll": c["scroll"]}
+
+# ——— Wybór pliku z dysku ————————————————————————————————————
+# Wbudowane okno Godota wygląda obco i nie zna katalogów użytkownika, więc
+# wszędzie, gdzie gracz wskazuje plik, prosimy o okno systemowe: na Windowsie
+# zwykłe „Otwórz”, na macOS panel Findera, na Linuksie okno portalu XDG.
+# Wystarczy `use_native_dialog` — gdy platforma natywnego okna nie ma, silnik
+# sam pokazuje własne, więc jedna ścieżka kodu obsługuje oba przypadki.
+
+static var _last_pick_dir := ""
+
+# `filters` w formacie Godota: ["*.png, *.jpg ; Obrazy"].
+# `on_pick` dostaje jedną bezwzględną ścieżkę do istniejącego pliku.
+# Okno samo się sprząta — po wyborze albo anulowaniu znika z drzewa.
+static func pick_file(host: Node, title: String, filters: PackedStringArray,
+		on_pick: Callable, start_dir := "") -> void:
+	if host == null or not host.is_inside_tree():
+		return
+	var fd := FileDialog.new()
+	fd.title = title
+	fd.use_native_dialog = true
+	fd.access = FileDialog.ACCESS_FILESYSTEM
+	fd.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	fd.filters = filters
+	fd.ok_button_text = "Wybierz"
+	fd.cancel_button_text = "Anuluj"
+	var dir := _pick_dir(start_dir)
+	if dir != "":
+		fd.current_dir = dir
+	fd.file_selected.connect(func(path: String) -> void:
+		_last_pick_dir = path.get_base_dir()
+		fd.queue_free()
+		on_pick.call(path))
+	fd.canceled.connect(func() -> void: fd.queue_free())
+	host.add_child(fd)
+	# Rozmiar dotyczy tylko okna Godota; systemowe otwiera się tam, gdzie zwykle.
+	fd.popup_centered(Vector2i(880, 620))
+
+# Katalog startowy: ostatnio używany, a przy pierwszym wyborze „Obrazy”.
+static func _pick_dir(start_dir: String) -> String:
+	if start_dir != "" and DirAccess.dir_exists_absolute(start_dir):
+		return start_dir
+	if _last_pick_dir != "" and DirAccess.dir_exists_absolute(_last_pick_dir):
+		return _last_pick_dir
+	var pics := OS.get_system_dir(OS.SYSTEM_DIR_PICTURES)
+	if pics != "" and DirAccess.dir_exists_absolute(pics):
+		return pics
+	return ""
